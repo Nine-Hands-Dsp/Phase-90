@@ -330,7 +330,10 @@ void Phase90Processor::setStateInformation (const void* data, int size)
             ccSpeed = xml->getIntAttribute ("ccSpeed", 81);
             ccVoice = xml->getIntAttribute ("ccVoice", 82);
             ccSync = xml->getIntAttribute ("ccSync", 83);
-            uiHeight = jlimit (p9ui::heightDefault, p9ui::heightMax, xml->getIntAttribute ("uiHeight", p9ui::heightDefault));
+            {
+                const int uh = xml->getIntAttribute ("uiHeight", 0);   // 0 = aucune taille sauvegardée pour cette instance
+                uiHeight = uh > 0 ? jlimit (p9ui::heightDefault, p9ui::heightMax, uh) : 0;
+            }
             presetName = xml->getStringAttribute ("presetName");
             currentProgram = xml->getIntAttribute ("program", 0);
             apvts.replaceState (ValueTree::fromXml (*xml));

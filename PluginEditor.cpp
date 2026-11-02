@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
+#include "WigaWindowSize.h"
 
 using namespace juce;
 
@@ -26,7 +27,10 @@ Phase90Editor::Phase90Editor (Phase90Processor& p)
 
     // taille : identique à Small Tone / Holyverb, jamais plus petite que la taille par défaut
     const double aspect = (double) art::W / (double) art::H;
-    const int h0 = jlimit (p9ui::heightDefault, p9ui::heightMax, proc.uiHeight.load());   // lu avant setResizeLimits (qui appelle resized)
+    // taille sauvegardée avec le projet pour cette instance si elle existe, sinon taille choisie dans « Default size (new windows) »
+    const int saved = proc.uiHeight.load();                                                // lu avant setResizeLimits (qui appelle resized)
+    const int h0 = saved > 0 ? jlimit (p9ui::heightDefault, p9ui::heightMax, saved)
+                             : p9ui::sizeHeights[WigaWindowSize::defaultIndex (JucePlugin_Name, p9ui::numSizes)];
     setResizable (true, true);
     setResizeLimits (roundToInt (p9ui::heightDefault * aspect), p9ui::heightDefault,
                      roundToInt (p9ui::heightMax * aspect), p9ui::heightMax);
@@ -559,11 +563,20 @@ void Phase90Editor::showContextMenu (Hit hit)
         save.addItem (300 + s, "User " + String (s) + (n.isNotEmpty() ? "  -  " + n + "  (overwrite)" : String()));
     }
 
-    PopupMenu size;
-    const int h = getHeight();
-    size.addItem (401, "60 % (default)", true, std::abs (h - p9ui::heightDefault) < 8);
-    size.addItem (403, "75 %", true, std::abs (h - p9ui::height75) < 8);
-    size.addItem (404, "100 %", true, std::abs (h - p9ui::height100) < 8);
+    // Plugin size : taille de cette fenêtre + taille par défaut des nouvelles fenêtres (comme Octopus)
+    PopupMenu size, defSize;
+    {
+        const char* names[p9ui::numSizes] = { "60 %", "75 %", "100 %" };
+        const int h = getHeight();
+        const int def = WigaWindowSize::defaultIndex (JucePlugin_Name, p9ui::numSizes);
+        for (int i = 0; i < p9ui::numSizes; ++i)
+        {
+            size.addItem (401 + i, String (names[i]) + (i == def ? "  (default)" : ""), true, std::abs (h - p9ui::sizeHeights[i]) < 8);
+            defSize.addItem (420 + i, names[i], true, i == def);
+        }
+        size.addSeparator();
+        size.addSubMenu ("Default size (new windows)", defSize);
+    }
 
     auto flag = [this] (const char* id) { return proc.apvts.getRawParameterValue (id)->load() > 0.5f; };
     PopupMenu voice;
@@ -612,7 +625,7 @@ void Phase90Editor::showContextMenu (Hit hit)
     m.addSubMenu ("Save user preset", save);
     m.addSeparator();
     m.addSubMenu ("Voicing", voice);
-    m.addSubMenu ("Window size", size);
+    m.addSubMenu ("Plugin size", size);
     m.addSubMenu ("Options", opt);
     m.addSubMenu ("MIDI", midi);
 
@@ -637,9 +650,12 @@ void Phase90Editor::showContextMenu (Hit hit)
         }
         else if (r > 200 && r < 210) { if (proc.loadUserPreset (r - 200)) flash ("LOADED : " + proc.presetName.toUpperCase()); }
         else if (r > 300 && r < 310) askUserPresetName (r - 300);
-        else if (r == 401) setWindowHeight (p9ui::heightDefault);
-        else if (r == 403) setWindowHeight (p9ui::height75);
-        else if (r == 404) setWindowHeight (p9ui::height100);
+        else if (r >= 401 && r < 401 + p9ui::numSizes) setWindowHeight (p9ui::sizeHeights[r - 401]);
+        else if (r >= 420 && r < 420 + p9ui::numSizes)
+        {
+            WigaWindowSize::setDefaultIndex (JucePlugin_Name, r - 420);   // toutes les nouvelles fenêtres de ce plugin
+            setWindowHeight (p9ui::sizeHeights[r - 420]);                  // et cette fenêtre tout de suite
+        }
         else if (r == 520 || r == 521)
         {
             setParam ("block", r == 521 ? 1.0f : 0.0f);

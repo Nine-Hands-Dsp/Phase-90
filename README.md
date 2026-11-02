@@ -35,7 +35,7 @@ communs à toutes les instances (`%APPDATA%\Studio Wiga\Phase 90\user_presets.xm
 
 ## Clic droit (n'importe où)
 - **Voicing** : Script '74 / Block '77.
-- **Window size** : défaut (493 px de haut = taille minimale, comme Small Tone / Holyverb), 60 %, 75 %, 100 % — ou tirer le coin.
+- **Plugin size** : 60 % (taille par défaut d'origine = taille minimale, comme Small Tone / Holyverb), 75 %, 100 % — ou tirer le coin. La taille par défaut porte la mention « (default) ». Sous-menu **Default size (new windows)** : taille d'ouverture des nouvelles fenêtres, commune à toutes les instances (une taille déjà sauvegardée avec le projet pour une instance reste prioritaire).
 - **Options** : Tempo sync (Off / 1/4 / 1/8 / 1/2, comme le bouton SYNC), stéréo élargie (LFO du canal droit
   en opposition ; l'original est mono), graduations qui pulsent avec le LFO.
 - **MIDI** : canal, *Learn* — par défaut Footswitch = CC 80, Speed = CC 81, Script/Block = CC 82, bouton SYNC = CC 83 (chaque appui = état suivant) ;
@@ -56,6 +56,7 @@ Police Liberation Sans (licence SIL OFL, `OFL-Liberation.txt`).
 
 ## Versions
 
+- v1.4.0 : clic droit > Plugin size > Default size (new windows) : taille par défaut des nouvelles fenêtres au choix, comme dans Octopus
 - v1.3.0 : MIDI Learn au clic droit sur chaque commande (potard SPEED, SCRIPT/BLOCK, SYNC, footswitch) + « Clear MIDI » ; menu de taille : 60 % (default), 75 %, 100 %
 - v1.2.0 : anti-gel v2 (JUCE 8.0.15, caches refaits par le timer, chien de garde, aucun appel à l'hôte depuis le thread audio)
 

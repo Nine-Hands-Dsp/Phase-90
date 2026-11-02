@@ -7,6 +7,9 @@ namespace p9ui
 // tailles de fenêtre identiques à Small Tone / Holyverb (et Freeze Shimmer / Tuna) :
 // 100 % = 986 px de haut, ouverture par défaut = 493 px (= taille minimale)
 constexpr int heightDefault = 493, height60 = 592, height75 = 740, height100 = 986, heightMax = 1479;
+// tailles du menu « Plugin size » : 0 = 60 % (taille par défaut d'origine), 1 = 75 %, 2 = 100 %
+constexpr int numSizes = 3;
+constexpr int sizeHeights[numSizes] = { heightDefault, height75, height100 };
 }
 
 struct FactoryPreset { const char* name; double hz; bool block; int sync; };
@@ -60,7 +63,7 @@ public:
     std::atomic<int> ccFoot { 80 }, ccSpeed { 81 }, ccVoice { 82 }, ccSync { 83 };
     std::atomic<int> learnTarget { -1 };      // 0 foot, 1 speed, 2 script/block, 3 sync
     std::atomic<int> lastLearned { -1 };      // pour l'affichage
-    std::atomic<int> uiHeight { p9ui::heightDefault };
+    std::atomic<int> uiHeight { 0 };     // 0 = pas de taille sauvegardée pour cette instance -> taille par défaut des nouvelles fenêtres
 
     // ----- infos pour l'interface
     std::atomic<float> lfoVisual { 0.5f }, sweepVisual { 1000.0f };
