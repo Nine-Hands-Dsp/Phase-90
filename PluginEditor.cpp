@@ -602,7 +602,7 @@ void Phase90Editor::showContextMenu (Hit hit)
     midi.addItem (702, "Learn: Speed (" + ccLabel (proc.ccSpeed.load()) + ")");
     midi.addItem (703, "Learn: Script / Block (" + ccLabel (proc.ccVoice.load()) + ")");
     midi.addItem (705, "Learn: Sync button (" + ccLabel (proc.ccSync.load()) + ")");
-    midi.addItem (704, "Reset MIDI assignments (CC 80-83)");
+    midi.addItem (704, "Clear all MIDI assignments");
     midi.addSeparator();
     const bool mom = flag ("ccmomentary");
     midi.addItem (710, "Footswitch: latching pedal (127 = on, 0 = bypass)", true, ! mom);
@@ -667,7 +667,7 @@ void Phase90Editor::showContextMenu (Hit hit)
         else if (r >= 600 && r <= 616) setParam ("midichan", (float) (r - 600));
         else if (r >= 701 && r <= 703) proc.learnTarget.store (r - 701);
         else if (r == 705) proc.learnTarget.store (3);
-        else if (r == 704) { proc.ccFoot = 80; proc.ccSpeed = 81; proc.ccVoice = 82; proc.ccSync = 83; flash ("CC 80 / 81 / 82 / 83"); }
+        else if (r == 704) { proc.learnTarget.store (-1); proc.ccFoot = -1; proc.ccSpeed = -1; proc.ccVoice = -1; proc.ccSync = -1; flash ("MIDI CLEARED", 1.5); }
         else if (r == 710 || r == 711) setParam ("ccmomentary", r == 711 ? 1.0f : 0.0f);
         repaint();
     });

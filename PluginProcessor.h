@@ -60,7 +60,7 @@ public:
     void saveUserPreset (int slot, const juce::String& name);
 
     // ----- MIDI
-    std::atomic<int> ccFoot { 80 }, ccSpeed { 81 }, ccVoice { 82 }, ccSync { 83 };
+    std::atomic<int> ccFoot { -1 }, ccSpeed { -1 }, ccVoice { -1 }, ccSync { -1 };   // aucun CC par défaut (MIDI Learn)
     std::atomic<int> learnTarget { -1 };      // 0 foot, 1 speed, 2 script/block, 3 sync
     std::atomic<int> lastLearned { -1 };      // pour l'affichage
     std::atomic<int> uiHeight { 0 };     // 0 = pas de taille sauvegardée pour cette instance -> taille par défaut des nouvelles fenêtres

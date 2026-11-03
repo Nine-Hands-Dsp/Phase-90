@@ -326,10 +326,14 @@ void Phase90Processor::setStateInformation (const void* data, int size)
     {
         if (xml->hasTagName (apvts.state.getType()))
         {
-            ccFoot = xml->getIntAttribute ("ccFoot", 80);
-            ccSpeed = xml->getIntAttribute ("ccSpeed", 81);
-            ccVoice = xml->getIntAttribute ("ccVoice", 82);
-            ccSync = xml->getIntAttribute ("ccSync", 83);
+            ccFoot = xml->getIntAttribute ("ccFoot", -1);
+            ccSpeed = xml->getIntAttribute ("ccSpeed", -1);
+            ccVoice = xml->getIntAttribute ("ccVoice", -1);
+            ccSync = xml->getIntAttribute ("ccSync", -1);
+            // anciens projets (< 1.4.1) : ancienne table d'usine CC 80-83 jamais modifiée -> plus aucune assignation
+            if (xml->getIntAttribute ("ccFoot", 80) == 80 && xml->getIntAttribute ("ccSpeed", 81) == 81
+                && xml->getIntAttribute ("ccVoice", 82) == 82 && xml->getIntAttribute ("ccSync", 83) == 83)
+            { ccFoot = -1; ccSpeed = -1; ccVoice = -1; ccSync = -1; }
             {
                 const int uh = xml->getIntAttribute ("uiHeight", 0);   // 0 = aucune taille sauvegardée pour cette instance
                 uiHeight = uh > 0 ? jlimit (p9ui::heightDefault, p9ui::heightMax, uh) : 0;
