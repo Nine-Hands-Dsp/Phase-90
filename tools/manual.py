@@ -100,7 +100,7 @@ def section(lang):
     f.append(P(t["stereo"]))
     f.append(CondPageBreak(120 * mm))
     f.append(P(t["s6"], "h1")); f.append(P(t["midi_intro"]))
-    f.append(table(t["midi"], [30 * mm, 24 * mm, W - 54 * mm]))
+    f.append(table(t["midi"], [30 * mm, W - 30 * mm]))
     f.append(P(t["learn_h"], "h2")); f += [P(x) for x in t["learn"]]
     f.append(P(t["midimenu_h"], "h2")); f += [P(x) for x in t["midimenu"]]
     f.append(P(t["s7"], "h1")); f += [P(x) for x in t["win"]]
