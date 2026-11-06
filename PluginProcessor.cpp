@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "NineHandsFolder.h"
 #include "PluginEditor.h"
 #include <cstring>
 
@@ -187,7 +188,7 @@ void Phase90Processor::setParam (const String& id, float plain)
     }
 }
 
-// Anti-gel v2 (Studio Wiga) : jamais d'appel a l'hote (setValueNotifyingHost) ni de triggerAsyncUpdate()
+// Anti-gel v2 (NINE HANDS | DSP) : jamais d'appel a l'hote (setValueNotifyingHost) ni de triggerAsyncUpdate()
 // depuis le thread audio. Le MIDI met la valeur en file ; ce timer (thread de messages, 60 Hz) la transmet.
 const char* Phase90Processor::queuedId (int i)
 {
@@ -256,7 +257,7 @@ void Phase90Processor::applyPreset (float speed, bool block, int sync, const Str
 File Phase90Processor::userPresetFile()
 {
     return File::getSpecialLocation (File::userApplicationDataDirectory)
-             .getChildFile ("Studio Wiga").getChildFile ("Phase 90").getChildFile ("user_presets.xml");
+             .getChildFile (nhd::folderName()).getChildFile ("Phase 90").getChildFile ("user_presets.xml");
 }
 
 static std::unique_ptr<XmlElement> readUserPresets()

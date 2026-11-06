@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-//  Phase 90 (Studio Wiga) — moteur DSP (C++17 pur, sans JUCE : testé seul par dsp_test.cpp)
+//  Phase 90 (NINE HANDS | DSP) — moteur DSP (C++17 pur, sans JUCE : testé seul par dsp_test.cpp)
 //
 //  Modèle "composant par composant" du MXR Phase 90 :
 //

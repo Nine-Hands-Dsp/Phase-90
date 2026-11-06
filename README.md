@@ -1,4 +1,4 @@
-# Phase 90 — Studio Wiga
+# Phase 90 — NINE HANDS | DSP
 
 Phaser analogique **VST3** (Windows 64 bits + macOS universel Apple Silicon/Intel) au format pédale simple,
 modélisé composant par composant sur le **MXR Phase 90** : 4 cellules passe-tout à JFET 2N5952,
@@ -12,7 +12,7 @@ LFO triangle (trigger de Schmitt + intégrateur), mélange sec/traité 50/50, r�
    - `Phase90-VST3-Windows` → copie `Phase 90.vst3` dans `C:\Program Files\Common Files\VST3\`
    - `Phase90-VST3-macOS` → copie `Phase 90.vst3` dans `~/Library/Audio/Plug-Ins/VST3/` puis lance une fois
      `xattr -cr ~/Library/Audio/Plug-Ins/VST3/"Phase 90.vst3"`
-4. Dans Reaper : re-scanne les plug-ins. Le plugin apparaît comme **Phase 90 (Studio Wiga)**.
+4. Dans Reaper : re-scanne les plug-ins. Le plugin apparaît comme **Phase 90 (NINE HANDS | DSP)**.
 
 Le job *Test du moteur phaser* compile `dsp_test.cpp` (plage du SPEED, position et profondeur des encoches,
 effet de R28, niveaux, bypass, stabilité de 44,1 à 192 kHz). S'il échoue, le build est signalé en rouge.
@@ -31,7 +31,7 @@ Les graduations orange « respirent » avec le LFO (plus lumineuses quand le bal
 ## Presets
 Menu des presets de la fenêtre du DAW (programmes VST3) : Classic Block, Script '74, Eruption, Brown Sound,
 Slow Jet, Funk Rhythm, Fast Warble, Rotary Fast, Bass Swirl, Tempo 1/4, Tempo 1/8 Funk, Tempo 1/2 Swell. Clic droit → 9 presets utilisateur
-communs à toutes les instances (`%APPDATA%\Studio Wiga\Phase 90\user_presets.xml`).
+communs à toutes les instances (`%APPDATA%\NINE HANDS | DSP\Phase 90\user_presets.xml`).
 
 ## Clic droit (n'importe où)
 - **Voicing** : Script '74 / Block '77.

@@ -38,7 +38,7 @@ juce_add_binary_data(Phase90Assets SOURCES
   LiberationSans-Regular.ttf)
 
 juce_add_plugin(Phase90
-  COMPANY_NAME               "Studio Wiga"
+  COMPANY_NAME               "NINE HANDS | DSP"
   PLUGIN_MANUFACTURER_CODE   Wiga
   PLUGIN_CODE                Ph90
   FORMATS                    ${PHASE90_FORMATS}

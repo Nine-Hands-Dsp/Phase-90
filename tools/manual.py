@@ -1,4 +1,4 @@
-# PHASE 90 (Studio Wiga) - notice PDF bilingue (anglais complet puis francais complet).
+# PHASE 90 (NINE HANDS | DSP) - notice PDF bilingue (anglais complet puis francais complet).
 # Usage : python3 tools/manual.py <fichier PDF de sortie>
 # Illustrations : rendus reels du plugin et courbes du moteur, dans tools/manual/ (visuel inchange depuis la v1.1).
 import os, sys
@@ -120,7 +120,7 @@ def deco(lang):
         c.setStrokeColor(colors.HexColor("#DDD5CC")); c.setLineWidth(0.6); c.line(18 * mm, A4[1] - 12 * mm, A4[0] - 18 * mm, A4[1] - 12 * mm)
         c.setFillColor(ORANGE); c.rect(0, A4[1] - 2 * mm, A4[0], 2 * mm, stroke=0, fill=1)
         c.setFont("R", 7.5); c.setFillColor(GREY)
-        c.drawString(18 * mm, 10 * mm, "Phase 90 v" + VERSION + " · Studio Wiga")
+        c.drawString(18 * mm, 10 * mm, "Phase 90 v" + VERSION + " · NINE HANDS | DSP")
         c.drawRightString(A4[0] - 18 * mm, 10 * mm, ("English" if lang == "en" else "Français") + " · " + str(doc.page)); c.restoreState()
     return _d
 def cover_bg(c, doc):
@@ -128,7 +128,7 @@ def cover_bg(c, doc):
     c.setFillColor(ORANGE); c.rect(0, A4[1] - 3 * mm, A4[0], 3 * mm, stroke=0, fill=1); c.restoreState()
 
 doc = BaseDocTemplate(OUT, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=17 * mm, bottomMargin=17 * mm,
-                      title="Phase 90 v" + VERSION + " — Manual / Notice", author="Studio Wiga")
+                      title="Phase 90 v" + VERSION + " — Manual / Notice", author="NINE HANDS | DSP")
 fr_ = lambda i: Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id=i)
 doc.addPageTemplates([PageTemplate(id="cover", frames=[fr_("c")], onPage=cover_bg), PageTemplate(id="p", frames=[fr_("p")], onPage=deco("en")),
                       PageTemplate(id="cover_fr", frames=[fr_("c2")], onPage=cover_bg), PageTemplate(id="p_fr", frames=[fr_("p2")], onPage=deco("fr"))])
