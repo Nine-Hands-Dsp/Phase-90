@@ -116,7 +116,7 @@ TEXTS = [  # texte, police (0 medium, 1 bold, 2 light, 3 regular), hauteur des c
     ('INPUT', 3, 28.0, 2.5, 1108.0, 852.0, 90.0),
     ('90', 2, 84.0, 4.0, 617.5, 1575.0, 0.0),
 ]
-LOGO_C, LOGO_W = (617.5, 1668.0), 300.0
+LOGO_C, LOGO_W = (615.5, 1728.5), 300.0                      # centre entre les deux traits du bas (x et y)
 
 def column_fill(img, mask):
     """remplit le masque colonne par colonne (brossage vertical) entre les pixels valides au-dessus et en dessous"""
@@ -177,13 +177,34 @@ def text_mask(img, box, kind):
     full = np.zeros(img.shape[:2], bool); full[y0:y1, x0:x1] = m
     return full
 
+def panel_fill(img, mask):
+    """panneau noir brosse refait sous le potard : eclairage (basse frequence) prolonge depuis l'exterieur de la zone,
+    brossage vertical repris colonne par colonne d'une bande propre du panneau (plus de bande claire ni de bord de zone)"""
+    Hh, Ww = mask.shape
+    q = 6
+    sm = cv2.resize(cv2.GaussianBlur(img, (0, 0), 6.0), (Ww // q, Hh // q), interpolation=cv2.INTER_AREA)
+    notpanel = ((img[..., 0] - img[..., 2]) > 25) | (img.mean(2) > 90)         # orange, chrome : pas une source
+    notpanel = cv2.dilate(notpanel.astype(np.uint8), np.ones((15, 15), np.uint8)) > 0
+    mm = cv2.dilate(cv2.resize((mask | notpanel).astype(np.uint8) * 255, (Ww // q, Hh // q), interpolation=cv2.INTER_NEAREST), np.ones((3, 3), np.uint8))
+    lo = np.dstack([cv2.inpaint(np.clip(sm[..., c], 0, 255).astype(np.uint8), mm, 20, cv2.INPAINT_TELEA) for c in range(3)]).astype(np.float32)
+    lo = cv2.GaussianBlur(lo, (0, 0), 4.0)
+    base = cv2.resize(lo, (Ww, Hh), interpolation=cv2.INTER_CUBIC)
+    hf = img - cv2.GaussianBlur(img, (0, 0), sigmaX=5.0, sigmaY=0.01)
+    col = np.median(hf[676:746], axis=0)                                  # bande propre entre SPEED et PHASE
+    rng = np.random.default_rng(12)
+    mod = 1.0 + 0.15 * cv2.GaussianBlur(rng.normal(0, 1, (Hh, Ww)).astype(np.float32), (0, 0), sigmaX=0.6, sigmaY=25.0) * 4
+    fill = base + col[None, :, :] * mod[..., None]
+    w_ = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 12.0)
+    w_ = np.where(cv2.erode(mask.astype(np.uint8), np.ones((31, 31), np.uint8)) > 0, 1.0, w_)
+    return img * (1 - w_[..., None]) + fill * w_[..., None]
+
 def erase_all(W_):
     Hh, Ww = W_.shape[:2]
     yy, xx = np.mgrid[0:Hh, 0:Ww].astype(np.float32)
     # potard + graduations + leur halo + SPEED : panneau noir brosse refait colonne par colonne
     m = (np.hypot(xx - TICK_C[0], yy - TICK_C[1]) < 284.0) & (yy > 72)
     m |= (xx > 495) & (xx < 740) & (yy > 565) & (yy < 668)
-    B = column_fill(W_, m)
+    B = panel_fill(W_, m)
     # lettres PHASE (interieur du cartouche, brosse vertical)
     B = column_fill(B, (xx > 382) & (xx < 853) & (yy > 791) & (yy < 927))
     # reflet orange a gauche du cartouche PHASE (visuel asymetrique) : panneau noir brosse refait
@@ -641,6 +662,13 @@ def fs_layers():
     """footswitch photo du kit + reflet orange de l'anneau sur l'ecrou (calque en fondu avec l'anneau)"""
     spr, _, S_, btn = PC.footswitch_sprite(FS_FLATS, 1, pad=1.5)
     n = spr.shape[0]
+    # interieur du footswitch (bouton en metal tourne) tourne de 45 deg : reflet principal en haut a gauche a 45 deg,
+    # comme le potard SPEED (sur la photo il est en haut)
+    M_ = cv2.getRotationMatrix2D((n / 2, n / 2), 45.0, 1.0)
+    rot = cv2.warpAffine(spr.astype(np.float32), M_, (n, n), flags=cv2.INTER_CUBIC)
+    yy0, xx0 = np.mgrid[0:n, 0:n].astype(np.float32) + 0.5
+    wr = np.clip(btn + 1.0 - np.hypot(xx0 - n / 2, yy0 - n / 2), 0, 1)[..., None]
+    spr = spr * (1 - wr) + rot * wr
     yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
     rr = np.hypot(xx - n / 2, yy - n / 2) / (FS_FLATS / 2)
     a = spr[..., 3] / 255.0
