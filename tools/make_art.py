@@ -190,8 +190,29 @@ def erase_all(W_):
     B = column_fill(B, (xx > 290) & (xx < 347) & (yy > 740) & (yy < 970))
     # textes sombres sur l'orange : OUTPUT, INPUT, 90
     tm = np.zeros(B.shape[:2], bool)
-    for x0, y0, x1, y1 in ((96, 728, 150, 995), (1080, 758, 1138, 952), (500, 1512, 740, 1640)):
+    for x0, y0, x1, y1 in ((500, 1512, 740, 1640),):
         tm[y0:y1, x0:x1] = True
+    # bandes orange des cotes (OUTPUT / INPUT) : tout l'orange de la zone, pour ne garder aucune trace des lettres
+    Lw = W_.mean(2)
+    panel = cv2.morphologyEx((Lw < 45).astype(np.uint8), cv2.MORPH_OPEN, np.ones((17, 17), np.uint8)).astype(bool)
+    side = np.zeros_like(tm)
+    for x0, y0, x1, y1 in ((74, 110, 178, 1190), (1056, 110, 1162, 1190)):
+        side[y0:y1, x0:x1] = True
+    letters = np.zeros_like(tm)
+    for x0, y0, x1, y1 in ((74, 680, 178, 1025), (1056, 690, 1162, 1020)):
+        letters[y0:y1, x0:x1] = True
+    hue = (W_[..., 0] - W_[..., 2]) > 60
+    side &= hue | (letters & ~panel)
+    side &= ~cv2.dilate(panel.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool) & (Lw < 200)   # ni le panneau noir ni le chrome
+    side = cv2.erode(side.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
+    # teinte : profil horizontal de la bande, pris colonne par colonne sous la zone (bande droite et propre)
+    lowB = cv2.GaussianBlur(B, (0, 0), 2.0)
+    base = B.copy()
+    for x0, x1 in ((74, 178), (1056, 1162)):
+        prof = np.median(lowB[1035:1110, x0:x1], axis=0)
+        base[:, x0:x1] = prof[None, :, :]
+    base = cv2.GaussianBlur(base, (0, 0), 1.0)
+    B = grain_fill(B, side, (300, 1570, 460, 1670), seed=4, base=base, feather=3.0)
     return grain_fill(B, tm, (300, 1570, 460, 1670), feather=7.0)
 
 if __name__ == '__main__' and 'erase' in sys.argv:
@@ -208,8 +229,8 @@ def sstep(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
 
 DOME_R = 163.0                                               # cercle orange de la collerette (bord sur le panneau noir)
-ARC_R, ARC_W = 176.0, 3.4                                    # arc grave autour de la collerette (visuel), rayon / largeur
-ARC_SPANS = ((5.0, 86.5), (93.5, 175.0))                    # degres (0 = droite, 90 = bas) : coupe au milieu en bas
+ARC_R, ARC_W = 172.0, 6.5                                    # arc grave autour de la collerette (visuel), rayon / largeur
+ARC_SPANS = ((10.0, 86.0), (94.0, 170.0))                    # degres (0 = droite, 90 = bas) : coupe au milieu en bas
 DASHES = ((392, 1295, 450, 1352), (782, 1295, 840, 1352))    # traits ||| de part et d'autre (gardes)
 
 def engrave_arc(img, C):
@@ -239,7 +260,7 @@ def engrave_arc(img, C):
     out = img.copy(); out[y0:y1, x0:x1] = reg
     return out
 
-FRAME_IN = (124.0, 1328.0, 1111.0, 1716.0, 44.0)             # interieur du cadre grave du bas (x0, y0, x1, y1, pan coupe)
+FRAME_IN = (124.0, 1328.0, 1111.0, 1716.0, 74.0)             # interieur du cadre grave du bas (x0, y0, x1, y1, pan coupe)
 
 def clean_bottom(B):
     """bas de la pedale : interieur du cadre grave + collerette refaits d'un seul tenant (eclairage doux ajuste,
@@ -256,7 +277,7 @@ def clean_bottom(B):
         dash |= (xx > a0 - 6) & (xx < a1 + 6) & (yy > b0 - 6) & (yy < b1 + 6)
     dash &= B.mean(2) < 42.0                                             # seulement les traits ||| eux-memes
     dash = cv2.dilate(dash.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-    region = (poly | (r < DOME_R - 5.0)) & ~dash
+    region = (poly | (r < DOME_R - 5.0) | ((r < 205.0) & (yy > 1284.0))) & ~dash
     # eclairage : polynome de degre 2 ajuste sur l'orange propre (on ecarte les pixels trop sombres = ombres)
     low = cv2.GaussianBlur(B, (0, 0), 4.0)
     ys_, xs_ = np.where(poly & ~dash & (r > 200))
@@ -277,6 +298,35 @@ def clean_bottom(B):
     w_ = np.maximum(w_, cv2.erode(region.astype(np.uint8), np.ones((9, 9), np.uint8)).astype(np.float32))
     out = B * (1 - w_[..., None]) + clean * w_[..., None]
     return engrave_arc(out, FS_C)
+
+def smooth_panel_edge(B, y0=1120.0, y1=1305.0):
+    """bas du panneau noir (bords droits, arrondis, tour de la collerette) : bord et liseré clair redessines a partir
+    d'un profil moyen pris sur une portion propre, en fonction de la distance au bord (plus de crenelage ni de points)"""
+    Hh, Ww = B.shape[:2]
+    yy, xx = np.mgrid[0:Hh, 0:Ww].astype(np.float32)
+    L = cv2.GaussianBlur(B.mean(2), (0, 0), 1.0)
+    m = cv2.GaussianBlur((L < 50).astype(np.float32), (0, 0), 2.0) > 0.5
+    m8 = m.astype(np.uint8)
+    sdf = cv2.distanceTransform(1 - m8, cv2.DIST_L2, 5) - cv2.distanceTransform(m8, cv2.DIST_L2, 5)
+    sdf = cv2.GaussianBlur(sdf, (0, 0), 1.2)                              # > 0 cote orange
+    zone = (yy > y0) & (yy < y1) & (xx > 80) & (xx < Ww - 80)
+    ref = (xx > 185) & (xx < 380) & (yy > 1240) & (yy < 1305)
+    bins = np.arange(-6.0, 8.01, 0.5)
+    prof = []
+    for b in bins:
+        sel = ref & (np.abs(sdf - b) < 0.25)
+        prof.append(np.median(B[sel], axis=0) if sel.sum() > 20 else np.array([np.nan] * 3))
+    prof = np.array(prof)
+    for c in range(3):
+        ok = ~np.isnan(prof[:, c]); prof[:, c] = np.interp(bins, bins[ok], prof[ok, c])
+    prof = np.stack([cv2.GaussianBlur(prof[:, c].reshape(-1, 1).astype(np.float32), (1, 0), 0.8).ravel() for c in range(3)], -1)
+    band = zone & (sdf > -6) & (sdf < 8)
+    new = np.stack([np.interp(sdf, bins, prof[:, c]) for c in range(3)], -1).astype(np.float32)
+    grain = B - cv2.GaussianBlur(B, (0, 0), 1.5)
+    new = new + grain * np.clip((sdf - 3.0) / 3.0, 0, 1)[..., None] * 0.8    # grain de l'orange garde loin du bord
+    w_ = band * np.clip(1 - (np.abs(sdf - 1.0) - 4.0) / 2.0, 0, 1)
+    w_ = cv2.GaussianBlur(w_.astype(np.float32), (0, 0), 0.8) * zone
+    return B * (1 - w_[..., None]) + new * w_[..., None]
 
 def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True, diffuser=True):
     """anneau du footswitch : fond eteint (dans B) + source allumee + halo (calques alpha)"""
@@ -551,6 +601,7 @@ def build(write=True):
     alpha = box_alpha(W_)
     B, ring_src, ring_halo = ring_layers(W_, B, diffuser=False)
     B = clean_bottom(B)
+    B = smooth_panel_edge(B)
     B, tick_src, tick_halo = bold_tick_layers(B)
     out_rgb = B.copy(); out_a = alpha.copy()
     # footswitch photo
