@@ -112,7 +112,7 @@ for (x0, y0, x1, y1, w) in LAY['ticks']:
     d.line([(x0 * K * SS, y0 * K * SS), (x1 * K * SS, y1 * K * SS)], fill=(226, 226, 230, 236), width=max(1, int(2 * w * SS)))
 # inscription du bouton SYNC
 sx, sy, sch = LAY['syncLabel']
-text('SYNC' if SYNC == 0 else 'SYNC ' + SYNC_NAMES[SYNC], 3, sch, 1.0, sx, sy, 0, (212, 212, 216, 235) if SYNC == 0 else (255, 150, 60, 255))
+text('SYNC' if SYNC == 0 else 'SYNC ' + SYNC_NAMES[SYNC], 3, sch, 1.0, sx, sy, 0, (212, 212, 216, 235) if SYNC == 0 else (246, 246, 248, 255))
 # pastille presets / ligne d'etat : face noire, contour sombre, liseré gris clair (comme le cartouche du visuel)
 px, py, pw, ph = LAY['preset']
 R = lambda v: v * K * SS

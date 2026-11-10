@@ -11,7 +11,7 @@ namespace
     const Colour inkDark (0xff180a04);             // OUTPUT, INPUT, 90 (sur l'orange)
     const Colour phaseOrange (0xffec701c);         // PHASE, en relief dans le cartouche
     const Colour ringOrange (0xffff8024), ringCoreCol (0xffffd6a0);   // anneau du footswitch (dessin d'Octopus)
-    const Colour syncLit (0xffff963c);
+    const Colour syncLit (0xfff6f6f8);            // SYNC 1/4 en blanc quand la synchro est active (LED orange)
     const Colour barFill (0xff0a0a0b), barEdge (0xff606064), barInk (0xffe8e8ec);
     const Colour menuAccent (0xffff8a2a);          // pastille des en-tetes de menu (orange de la pedale)
     constexpr float arrowW = 34.0f;
@@ -423,7 +423,7 @@ void Phase90Editor::drawPrint (Graphics& g)
     g.fillPath (phasePath, AffineTransform::translation (-0.35f, -0.45f));
     g.setColour (phaseOrange);
     g.fillPath (phasePath);
-    // SYNC : gris, orange quand la synchro tempo est active (avec la division)
+    // SYNC : gris clair, blanc quand la synchro tempo est active (avec la division)
     const int sd = proc.syncState();
     g.setColour (sd > 0 ? syncLit : inkLight.withAlpha (0.92f));
     g.fillPath (syncLabels[sd]);

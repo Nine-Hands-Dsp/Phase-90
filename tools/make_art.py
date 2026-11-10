@@ -136,12 +136,15 @@ def column_fill(img, mask):
             out[y0:y1 + 1, x] = a * (1 - t) + b * t
     return out
 
-def grain_fill(img, mask, src_box, seed=1):
-    """remplit (zone orange) : teinte basse frequence par inpainting + grain repris d'une zone propre"""
+def grain_fill(img, mask, src_box, seed=1, base=None, feather=1.2):
+    """remplit (zone orange) : teinte basse frequence par inpainting (ou base donnee) + grain repris d'une zone propre"""
     m8 = (mask * 255).astype(np.uint8)
-    low = cv2.GaussianBlur(img, (0, 0), 3.0)
-    inp = np.dstack([cv2.inpaint(np.clip(low[..., c], 0, 255).astype(np.uint8), m8, 9, cv2.INPAINT_TELEA) for c in range(3)]).astype(np.float32)
-    inp = cv2.GaussianBlur(inp, (0, 0), 2.0)
+    if base is None:
+        low = cv2.GaussianBlur(img, (0, 0), 3.0)
+        inp = np.dstack([cv2.inpaint(np.clip(low[..., c], 0, 255).astype(np.uint8), m8, 9, cv2.INPAINT_TELEA) for c in range(3)]).astype(np.float32)
+        inp = cv2.GaussianBlur(inp, (0, 0), 2.0)
+    else:
+        inp = base
     x0, y0, x1, y1 = src_box
     patch = img[y0:y1, x0:x1]; patch = patch - cv2.GaussianBlur(patch, (0, 0), 3.0)
     ph, pw = patch.shape[:2]
@@ -154,8 +157,9 @@ def grain_fill(img, mask, src_box, seed=1):
             oy, ox = rng.integers(0, ph // 2), rng.integers(0, pw // 2)
             p = patch[oy:oy + ph // 2, ox:ox + pw // 2]
             tex[ty:ty + p.shape[0], tx:tx + p.shape[1]] = p[:H_ - ty, :W_ - tx]
-    soft = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 1.2)
-    soft = np.maximum(soft, mask.astype(np.float32))[..., None]
+    soft = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), feather)
+    if feather <= 2.0: soft = np.maximum(soft, mask.astype(np.float32))
+    soft = soft[..., None]
     return img * (1 - soft) + (inp + tex) * soft
 
 def text_mask(img, box, kind):
@@ -188,7 +192,7 @@ def erase_all(W_):
     tm = np.zeros(B.shape[:2], bool)
     for x0, y0, x1, y1 in ((96, 728, 150, 995), (1080, 758, 1138, 952), (500, 1512, 740, 1640)):
         tm[y0:y1, x0:x1] = True
-    return grain_fill(B, tm, (300, 1570, 460, 1670))
+    return grain_fill(B, tm, (300, 1570, 460, 1670), feather=7.0)
 
 if __name__ == '__main__' and 'erase' in sys.argv:
     B = erase_all(warp_design())
@@ -197,11 +201,82 @@ if __name__ == '__main__' and 'erase' in sys.argv:
 
 # ------------------------------------------------------------------ 3. lumieres, footswitch, jacks, detourage
 RING_R0, RING_R1 = 113.0, 149.0                              # ancien anneau lumineux du visuel (efface)
-GRAIN_BOX = (180, 1320, 300, 1440)                           # orange propre (grain repris pour la collerette du footswitch)
+GRAIN_BOX = (200, 1450, 360, 1570)                           # orange propre (grain repris pour la collerette du footswitch)
 FS_FLATS = 206.0                                             # footswitch photo : distance entre plats (px)
 
 def sstep(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
+
+DOME_R = 163.0                                               # cercle orange de la collerette (bord sur le panneau noir)
+ARC_R, ARC_W = 176.0, 3.4                                    # arc grave autour de la collerette (visuel), rayon / largeur
+ARC_SPANS = ((5.0, 86.5), (93.5, 175.0))                    # degres (0 = droite, 90 = bas) : coupe au milieu en bas
+DASHES = ((392, 1295, 450, 1352), (782, 1295, 840, 1352))    # traits ||| de part et d'autre (gardes)
+
+def engrave_arc(img, C):
+    """arc grave sombre, net (sur-echantillonne x3), arete claire du cote oppose a la lumiere"""
+    SS = 3
+    x0, y0 = int(C[0] - ARC_R - 12), int(C[1] - 20)
+    x1, y1 = int(C[0] + ARC_R + 12), int(C[1] + ARC_R + 12)
+    yy, xx = np.mgrid[y0 * SS:y1 * SS, x0 * SS:x1 * SS].astype(np.float32) / SS + 0.5 / SS
+    dx, dy = xx - C[0], yy - C[1]
+    r = np.hypot(dx, dy); a = np.degrees(np.arctan2(dy, dx))
+    a = np.where(a < -90, a + 360, a)
+    def arc(rad, w):
+        cov = np.zeros_like(r)
+        for a0, a1 in ARC_SPANS:
+            ang = np.clip(a, a0, a1)
+            px = C[0] + rad * np.cos(np.radians(ang)); py = C[1] + rad * np.sin(np.radians(ang))
+            d = np.hypot(xx - px, yy - py)
+            cov = np.maximum(cov, np.clip(w / 2 - d + 0.5 / SS * SS * 0.5, 0, 1))
+        return cov
+    groove = arc(ARC_R, ARC_W)
+    lip = arc(ARC_R + 2.3, 1.4) * (1 - groove)
+    def down(m): return cv2.resize(m, (x1 - x0, y1 - y0), interpolation=cv2.INTER_AREA)
+    g_, l_ = down(groove)[..., None], down(lip)[..., None]
+    reg = img[y0:y1, x0:x1]
+    reg = reg * (1 - 0.32 * l_) + np.minimum(reg * 1.25 + 18, 255) * 0.32 * l_
+    reg = reg * (1 - 0.92 * g_) + np.array([24.0, 9.0, 3.0]) * 0.92 * g_
+    out = img.copy(); out[y0:y1, x0:x1] = reg
+    return out
+
+FRAME_IN = (124.0, 1328.0, 1111.0, 1716.0, 44.0)             # interieur du cadre grave du bas (x0, y0, x1, y1, pan coupe)
+
+def clean_bottom(B):
+    """bas de la pedale : interieur du cadre grave + collerette refaits d'un seul tenant (eclairage doux ajuste,
+    plus d'ombre portee ni de taches du visuel), grain repris d'une zone propre, puis arc grave redessine"""
+    Hh, Ww = B.shape[:2]
+    yy, xx = np.mgrid[0:Hh, 0:Ww].astype(np.float32)
+    x0, y0, x1, y1, ch = FRAME_IN
+    poly = (xx > x0) & (xx < x1) & (yy > y0) & (yy < y1)
+    for cx_, cy_, sx, sy in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
+        poly &= (sx * (xx - cx_) + sy * (yy - cy_)) > ch                  # coins coupes (pans du cadre)
+    r = np.hypot(xx - FS_C[0], yy - FS_C[1])
+    dash = np.zeros_like(poly)
+    for a0, b0, a1, b1 in DASHES:
+        dash |= (xx > a0 - 6) & (xx < a1 + 6) & (yy > b0 - 6) & (yy < b1 + 6)
+    dash &= B.mean(2) < 42.0                                             # seulement les traits ||| eux-memes
+    dash = cv2.dilate(dash.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    region = (poly | (r < DOME_R - 5.0)) & ~dash
+    # eclairage : polynome de degre 2 ajuste sur l'orange propre (on ecarte les pixels trop sombres = ombres)
+    low = cv2.GaussianBlur(B, (0, 0), 4.0)
+    ys_, xs_ = np.where(poly & ~dash & (r > 200))
+    sel = np.random.default_rng(3).choice(len(xs_), min(40000, len(xs_)), replace=False)
+    X = xs_[sel].astype(np.float64) / Ww; Y = ys_[sel].astype(np.float64) / Hh
+    A = np.c_[np.ones_like(X), X, Y, X * X, X * Y, Y * Y]
+    V = low[ys_[sel], xs_[sel]].astype(np.float64)
+    keep = np.ones(len(X), bool)
+    for _ in range(3):
+        coef = np.linalg.lstsq(A[keep], V[keep], rcond=None)[0]
+        res = (V - A @ coef).mean(1)
+        keep = res > -5.0
+    Xg = xx / Ww; Yg = yy / Hh
+    base = np.stack([coef[0, c] + coef[1, c] * Xg + coef[2, c] * Yg + coef[3, c] * Xg * Xg + coef[4, c] * Xg * Yg + coef[5, c] * Yg * Yg
+                     for c in range(3)], -1).astype(np.float32)
+    clean = grain_fill(B, region, GRAIN_BOX, seed=11, base=base, feather=0.01)
+    w_ = cv2.GaussianBlur(region.astype(np.float32), (0, 0), 3.0)
+    w_ = np.maximum(w_, cv2.erode(region.astype(np.uint8), np.ones((9, 9), np.uint8)).astype(np.float32))
+    out = B * (1 - w_[..., None]) + clean * w_[..., None]
+    return engrave_arc(out, FS_C)
 
 def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True, diffuser=True):
     """anneau du footswitch : fond eteint (dans B) + source allumee + halo (calques alpha)"""
@@ -256,14 +331,30 @@ def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True, diffuser=True):
     else:
         # footswitch facon Octopus : plus de diffuseur ni de cuvette ; l'ecrou est pose sur l'orange uni de la
         # collerette (meme centre que le cercle orange). La lumiere est l'anneau fin dessine par le plugin dans la gorge.
-        RE = RING_R1 + 8.0
-        old = np.hypot(xx - FS_OLD[0], yy - FS_OLD[1]) < RING_R1 + 10.0     # ancien footswitch + anneau du visuel
-        ob = (r < RE) | old
-        tmp = off.copy()
-        tmp[ob] = inp[ob]
-        clean = grain_fill(tmp, ob.astype(np.float32), GRAIN_BOX, seed=5)
-        # fondu large vers l'orange d'origine (pas de bord de disque visible)
-        w_ = np.maximum(1 - sstep(RE - 18.0, RE + 2.0, r), cv2.GaussianBlur(old.astype(np.float32), (0, 0), 2.0))
+        # Collerette et zone orange autour refaites en entier (plus d'ombres ni de taches du visuel), puis arc grave
+        # concentrique redessine.
+        inside = r < DOME_R - 5.0
+        dash = np.zeros_like(r, bool)
+        for x0, y0, x1, y1 in DASHES:
+            dash |= (xx > x0 - 5) & (xx < x1 + 5) & (yy > y0 - 5) & (yy < y1 + 5)
+        frame = (yy < 1368.0) & ((xx < 456.0) | (xx > 778.0))          # traits du cadre de part et d'autre (gardes)
+        lower = (r < 265.0) & (yy > 1286.0) & ~dash & ~frame
+        ob = inside | lower
+        ring_ = (r > 270.0) & (r < 290.0) & (yy > 1380.0)
+        flat = np.median(D_lit[ring_], axis=0)                           # orange uni de la facade autour
+        src_ = cv2.GaussianBlur(off, (0, 0), 3.0)
+        top_ring = (r >= DOME_R - 14.0) & (r < DOME_R + 10.0) & (yy < 1286.0)
+        src_[top_ring] = flat                                            # bord de la collerette sur le noir : ignore
+        q = 4
+        sm = cv2.resize(src_, (Ww // q, Hh // q), interpolation=cv2.INTER_AREA)
+        mm = cv2.resize(ob.astype(np.uint8) * 255, (Ww // q, Hh // q), interpolation=cv2.INTER_NEAREST)
+        mm = cv2.dilate(mm, np.ones((3, 3), np.uint8))
+        lo = np.dstack([cv2.inpaint(np.clip(sm[..., c], 0, 255).astype(np.uint8), mm, 12, cv2.INPAINT_TELEA) for c in range(3)]).astype(np.float32)
+        lo = cv2.GaussianBlur(lo, (0, 0), 3.0)
+        base = cv2.resize(lo, (Ww, Hh), interpolation=cv2.INTER_CUBIC)
+        clean = grain_fill(off, ob, GRAIN_BOX, seed=5, base=base, feather=0.01)
+        w_ = cv2.GaussianBlur(ob.astype(np.float32), (0, 0), 5.0)
+        w_ = np.where(inside & (r < DOME_R - 12.0), 1.0, w_)
         off = off * (1 - w_[..., None]) + clean * w_[..., None]
     # creux sous le footswitch (cache par l'ecrou)
     hole = (1 - sstep(RING_R0 - 3, RING_R0 - 0.5, r)) * (1.0 if diffuser else 0.0)
@@ -329,6 +420,8 @@ def bold_tick_layers(B):
     halo = np.dstack([np.array([255.0, 100.0, 22.0]) * (1 - hc) + np.array([255.0, 170.0, 90.0]) * hc, a_h * 255])
     return Bo, src, halo
 
+CORNER_R = {'tl': 120.0, 'tr': 110.0, 'bl': 120.0, 'br': 120.0}  # rayons des coins du boitier (px), mesures sur le chrome du visuel
+
 def box_alpha(W_):
     """canal alpha du boitier : contour de l'arete chromee du visuel, lisse"""
     L = W_.mean(2)
@@ -339,11 +432,24 @@ def box_alpha(W_):
         if len(xs) == 0: lefts[y], rights[y] = Ww / 2, Ww / 2; continue
         lefts[y] = xs[0] + int(TX0) - 2; rights[y] = xs[-1] + int(TX0) - 2 + 1
     lefts = np.maximum(lefts, TX0 - 0.5); rights = np.minimum(rights, TX1 + 0.5)
+    # silhouette geometrique : cotes droits (mediane mesuree) + coins arrondis propres (le visuel a une ombre
+    # sombre collee au coin haut gauche qui faisait un defaut sur l'arrondi du chrome)
+    XL = float(np.median(lefts[300:1500])); XR = float(np.median(rights[300:1500]))
+    ys = np.arange(Hh) + 0.5
+    def inset(y, Rc, y_edge, down):
+        d = (y_edge + Rc - y) if down else (y - (y_edge - Rc))
+        d = np.clip(d, 0, Rc)
+        return Rc - np.sqrt(np.maximum(Rc * Rc - d * d, 0))
     # lissage du bord (sauf aux extremites)
-    ls = cv2.GaussianBlur(lefts.astype(np.float32).reshape(-1, 1), (0, 0), 3.0).ravel()
-    rs = cv2.GaussianBlur(rights.astype(np.float32).reshape(-1, 1), (0, 0), 3.0).ravel()
-    xx = np.arange(Ww)[None, :] + 0.5
-    a = np.clip(xx - ls[:, None] + 0.5, 0, 1) * np.clip(rs[:, None] - xx + 0.5, 0, 1)
+    # couverture exacte d'un rectangle a coins arrondis (distance signee), anticrenelee
+    yy_, xx_ = np.mgrid[0:Hh, 0:Ww].astype(np.float32) + 0.5
+    top, left = yy_ < Hh / 2, xx_ < Ww / 2
+    Rc = np.where(top, np.where(left, CORNER_R['tl'], CORNER_R['tr']), np.where(left, CORNER_R['bl'], CORNER_R['br']))
+    cx_ = np.clip(xx_, XL + Rc, XR - Rc); cy_ = np.clip(yy_, Rc, Hh - Rc)
+    inner = (xx_ > XL + Rc) & (xx_ < XR - Rc) | (yy_ > Rc) & (yy_ < Hh - Rc)
+    dist = np.where(inner, np.minimum.reduce([xx_ - XL, XR - xx_, yy_ + 1e3, Hh + 1e3 - yy_]),
+                    Rc - np.hypot(xx_ - cx_, yy_ - cy_))
+    a = np.clip(dist + 0.5, 0, 1)
     return a.astype(np.float32)
 
 def place(dst_rgb, dst_a, spr, x0, y0):
@@ -372,7 +478,7 @@ LED_R = 19.0                                                 # LED SYNC (photo d
 SYNC_R1 = LED_R + 3.0                                        # zone cliquable / position de l'inscription
 
 def led_layers():
-    """LED rouge de l'utilisateur a la place du bouton SYNC : eteinte (fond), allumee (source) et halo (dose par Glow)"""
+    """LED de l'utilisateur (teintee orange comme le footswitch) a la place du bouton SYNC : eteinte (fond), allumee (source) et halo (dose par Glow)"""
     src = np.asarray(Image.open(os.path.join(ROOT, 'assets', 'kit', 'led_red_lit.png')).convert('RGBA')).astype(np.float32)
     n0 = src.shape[0]; R0_ = 47.0                                # lentille : disque de 94 px centre dans 150 px
     k = LED_R / R0_
@@ -382,10 +488,15 @@ def led_layers():
     rr = np.hypot(xx - n / 2, yy - n / 2)
     lens = np.clip(LED_R - rr + 0.5, 0, 1)
     lit[..., 3] = lit[..., 3] * lens
+    # LED orange comme l'anneau du footswitch : la photo rouge sert de carte d'intensite
+    inten = np.clip((lit[..., 0] * 0.55 + lit[..., 1] * 0.9 + lit[..., 2] * 0.2) / 255.0, 0, 1)[..., None]
+    c0, c1, c2 = np.array([70.0, 18.0, 0.0]), np.array([255.0, 118.0, 26.0]), np.array([255.0, 214.0, 160.0])
+    t1 = np.clip(inten / 0.55, 0, 1); t2 = np.clip((inten - 0.55) / 0.45, 0, 1)
+    lit[..., :3] = (c0 * (1 - t1) + c1 * t1) * (1 - t2) + c2 * t2
     # eteinte : verre rouge sombre (meme lentille, sans lumiere interne), petit reflet fixe en haut a gauche
     off = lit.copy()
     lum = off[..., :3].mean(2, keepdims=True) / 255.0
-    off[..., :3] = np.array([70.0, 8.0, 6.0]) * (0.35 + 0.65 * lum) + 6.0
+    off[..., :3] = np.array([74.0, 30.0, 6.0]) * (0.35 + 0.65 * lum) + 6.0
     ang = np.arctan2(yy - n / 2, xx - n / 2)
     spec = np.exp(-(((xx - n / 2 + LED_R * 0.38) ** 2 + (yy - n / 2 + LED_R * 0.42) ** 2) / (2 * (LED_R * 0.18) ** 2)))
     off[..., :3] = off[..., :3] + spec[..., None] * 120.0
@@ -415,7 +526,7 @@ def led_layers():
     a_h = np.clip(0.75 * np.exp(-d / 5.0) + 0.38 * np.exp(-d / 18.0) + 0.08 * np.exp(-d / 50.0), 0, 0.92)
     a_h = a_h * (1 - sstep(H / 2 - 16, H / 2 - 1, np.hypot(x3 - H / 2, y3 - H / 2)))
     mixc = np.exp(-d / 10.0)[..., None]
-    col = np.array([255.0, 120.0, 90.0]) * mixc + np.array([255.0, 30.0, 18.0]) * (1 - mixc)
+    col = np.array([255.0, 190.0, 120.0]) * mixc + np.array([255.0, 118.0, 30.0]) * (1 - mixc)
     halo = np.dstack([col, a_h * 255])
     return off_s, lit_s, halo
 
@@ -439,6 +550,7 @@ def build(write=True):
     B = erase_all(W_)
     alpha = box_alpha(W_)
     B, ring_src, ring_halo = ring_layers(W_, B, diffuser=False)
+    B = clean_bottom(B)
     B, tick_src, tick_halo = bold_tick_layers(B)
     out_rgb = B.copy(); out_a = alpha.copy()
     # footswitch photo
