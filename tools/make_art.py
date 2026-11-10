@@ -333,6 +333,10 @@ def smooth_panel_edge(B, y0=1095.0, y1=1305.0):
 # traits ||| de part et d'autre de la collerette (mesures sur le visuel) : (x haut, y haut, x bas, y bas), largeur 7
 BARS_L = [(399.0, 1315.0, 403.0, 1346.0), (414.5, 1315.0, 418.5, 1346.0), (430.0, 1315.0, 434.0, 1346.0), (445.5, 1315.0, 450.0, 1349.0)]
 BARS_R = [(836.0 - k * 15.5, 1318.0, 831.5 - k * 15.5, 1349.0) for k in range(3)] + [(786.5, 1318.0, 782.0, 1351.0)]
+# le dernier trait de chaque cote se termine exactement au depart de l'arc (meme ligne, sans decalage)
+def _arc_pt(deg): return (616.5 + 172.5 * math.cos(math.radians(deg)), 1303.5 + 172.5 * math.sin(math.radians(deg)))
+BARS_L[-1] = (BARS_L[-1][0] + 0.5, BARS_L[-1][1]) + _arc_pt(165.5)
+BARS_R[-1] = (BARS_R[-1][0] + 1.0, BARS_R[-1][1]) + _arc_pt(15.0)
 BAR_W = 7.0
 INK = np.array([20.0, 2.0, 0.0]); LIP = np.array([224.0, 135.0, 86.0])
 
