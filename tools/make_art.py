@@ -203,7 +203,7 @@ def erase_all(W_):
         letters[y0:y1, x0:x1] = True
     hue = (W_[..., 0] - W_[..., 2]) > 60
     side &= hue | (letters & ~panel)
-    side &= ~cv2.dilate(panel.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool) & (Lw < 200)   # ni le panneau noir ni le chrome
+    side &= ~cv2.dilate(panel.astype(np.uint8), np.ones((15, 15), np.uint8)).astype(bool) & (Lw < 200)   # liseré clair du bord garde,   # ni le panneau noir ni le chrome
     side = cv2.erode(side.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
     # teinte : profil horizontal de la bande, pris colonne par colonne sous la zone (bande droite et propre)
     lowB = cv2.GaussianBlur(B, (0, 0), 2.0)
@@ -229,8 +229,8 @@ def sstep(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
 
 DOME_R = 163.0                                               # cercle orange de la collerette (bord sur le panneau noir)
-ARC_R, ARC_W = 172.0, 6.5                                    # arc grave autour de la collerette (visuel), rayon / largeur
-ARC_SPANS = ((10.0, 86.0), (94.0, 170.0))                    # degres (0 = droite, 90 = bas) : coupe au milieu en bas
+ARC_R, ARC_W = 172.5, 7.0                                    # arc grave autour de la collerette (visuel), rayon / largeur
+ARC_SPANS = ((15.0, 86.0), (94.0, 165.5))                    # degres (0 = droite, 90 = bas) : coupe au milieu en bas
 DASHES = ((392, 1295, 450, 1352), (782, 1295, 840, 1352))    # traits ||| de part et d'autre (gardes)
 
 def engrave_arc(img, C):
@@ -297,21 +297,23 @@ def clean_bottom(B):
     w_ = cv2.GaussianBlur(region.astype(np.float32), (0, 0), 3.0)
     w_ = np.maximum(w_, cv2.erode(region.astype(np.uint8), np.ones((9, 9), np.uint8)).astype(np.float32))
     out = B * (1 - w_[..., None]) + clean * w_[..., None]
-    return engrave_arc(out, FS_C)
+    return out
 
-def smooth_panel_edge(B, y0=1120.0, y1=1305.0):
+def smooth_panel_edge(B, y0=1095.0, y1=1305.0):
     """bas du panneau noir (bords droits, arrondis, tour de la collerette) : bord et liseré clair redessines a partir
     d'un profil moyen pris sur une portion propre, en fonction de la distance au bord (plus de crenelage ni de points)"""
     Hh, Ww = B.shape[:2]
     yy, xx = np.mgrid[0:Hh, 0:Ww].astype(np.float32)
     L = cv2.GaussianBlur(B.mean(2), (0, 0), 1.0)
-    m = cv2.GaussianBlur((L < 50).astype(np.float32), (0, 0), 2.0) > 0.5
+    m = cv2.GaussianBlur((L < 50).astype(np.float32), (0, 0), 3.5) > 0.5
     m8 = m.astype(np.uint8)
     sdf = cv2.distanceTransform(1 - m8, cv2.DIST_L2, 5) - cv2.distanceTransform(m8, cv2.DIST_L2, 5)
     sdf = cv2.GaussianBlur(sdf, (0, 0), 1.2)                              # > 0 cote orange
     zone = (yy > y0) & (yy < y1) & (xx > 80) & (xx < Ww - 80)
+    # bords des bandes OUTPUT / INPUT : liseré clair continu jusqu'au debut de la courbe du haut
+    zone |= (yy > 735.0) & (yy < y1) & ((xx < 200) | (xx > Ww - 200)) & (xx > 60) & (xx < Ww - 60)
     ref = (xx > 185) & (xx < 380) & (yy > 1240) & (yy < 1305)
-    bins = np.arange(-6.0, 8.01, 0.5)
+    bins = np.arange(-6.0, 12.01, 0.5)
     prof = []
     for b in bins:
         sel = ref & (np.abs(sdf - b) < 0.25)
@@ -320,13 +322,64 @@ def smooth_panel_edge(B, y0=1120.0, y1=1305.0):
     for c in range(3):
         ok = ~np.isnan(prof[:, c]); prof[:, c] = np.interp(bins, bins[ok], prof[ok, c])
     prof = np.stack([cv2.GaussianBlur(prof[:, c].reshape(-1, 1).astype(np.float32), (1, 0), 0.8).ravel() for c in range(3)], -1)
-    band = zone & (sdf > -6) & (sdf < 8)
+    band = zone & (sdf > -6) & (sdf < 12)
     new = np.stack([np.interp(sdf, bins, prof[:, c]) for c in range(3)], -1).astype(np.float32)
     grain = B - cv2.GaussianBlur(B, (0, 0), 1.5)
     new = new + grain * np.clip((sdf - 3.0) / 3.0, 0, 1)[..., None] * 0.8    # grain de l'orange garde loin du bord
-    w_ = band * np.clip(1 - (np.abs(sdf - 1.0) - 4.0) / 2.0, 0, 1)
-    w_ = cv2.GaussianBlur(w_.astype(np.float32), (0, 0), 0.8) * zone
+    w_ = band * np.clip(1 - (np.abs(sdf - 3.0) - 6.0) / 2.5, 0, 1)
+    w_ = cv2.GaussianBlur(w_.astype(np.float32), (0, 0), 0.8) * cv2.GaussianBlur(zone.astype(np.float32), (0, 0), 6.0)
     return B * (1 - w_[..., None]) + new * w_[..., None]
+
+# traits ||| de part et d'autre de la collerette (mesures sur le visuel) : (x haut, y haut, x bas, y bas), largeur 7
+BARS_L = [(399.0, 1315.0, 403.0, 1346.0), (414.5, 1315.0, 418.5, 1346.0), (430.0, 1315.0, 434.0, 1346.0), (445.5, 1315.0, 450.0, 1349.0)]
+BARS_R = [(836.0 - k * 15.5, 1318.0, 831.5 - k * 15.5, 1349.0) for k in range(3)] + [(786.5, 1318.0, 782.0, 1351.0)]
+BAR_W = 7.0
+INK = np.array([20.0, 2.0, 0.0]); LIP = np.array([224.0, 135.0, 86.0])
+
+def engrave_details(B):
+    """traits ||| et arc de la collerette redessines nets (sur-echantillonnes x4) : creux sombre et arete claire en bas
+    a droite (lumiere en haut a gauche), meme rendu que les traits du cadre ; l'arc a l'epaisseur des traits"""
+    Hh, Ww = B.shape[:2]
+    # effacement des traits du visuel
+    er = np.zeros((Hh, Ww), bool)
+    for x0, y0, x1, y1 in ((388, 1306, 458, 1362), (774, 1308, 846, 1364)):
+        er[y0:y1, x0:x1] = True
+    B = grain_fill(B, er, GRAIN_BOX, seed=21, feather=1.2)
+    SS = 4
+    def render(x0, y0, x1, y1, cov_fn):
+        yy, xx = np.mgrid[y0 * SS:y1 * SS, x0 * SS:x1 * SS].astype(np.float32) / SS + 0.5 / SS
+        core = cov_fn(xx, yy)
+        lip = cov_fn(xx - 1.1, yy - 1.4) * (1 - core)
+        d = lambda m: cv2.resize(m, (x1 - x0, y1 - y0), interpolation=cv2.INTER_AREA)[..., None]
+        reg = B[y0:y1, x0:x1]
+        reg = reg * (1 - 0.75 * d(lip)) + LIP * 0.75 * d(lip)
+        reg = reg * (1 - 0.95 * d(core)) + INK * 0.95 * d(core)
+        B[y0:y1, x0:x1] = reg
+    def seg_cov(segs, w):
+        def f(xx, yy):
+            cov = np.zeros_like(xx)
+            for ax, ay, bx, by in segs:
+                vx, vy = bx - ax, by - ay; L2 = vx * vx + vy * vy
+                t = np.clip(((xx - ax) * vx + (yy - ay) * vy) / L2, 0, 1)
+                dd = np.hypot(xx - (ax + t * vx), yy - (ay + t * vy))
+                cov = np.maximum(cov, np.clip(w / 2 - dd + 0.5 / SS, 0, 1))
+            return cov
+        return f
+    def arc_cov(xx, yy):
+        C = FS_C
+        a = np.degrees(np.arctan2(yy - C[1], xx - C[0])); a = np.where(a < -90, a + 360, a)
+        cov = np.zeros_like(xx)
+        for a0, a1 in ARC_SPANS:
+            ang = np.radians(np.clip(a, a0, a1))
+            dd = np.hypot(xx - (C[0] + ARC_R * np.cos(ang)), yy - (C[1] + ARC_R * np.sin(ang)))
+            cov = np.maximum(cov, np.clip(BAR_W / 2 - dd + 0.5 / SS, 0, 1))
+        return cov
+    def both(xx, yy):
+        return np.maximum(np.maximum(seg_cov(BARS_L, BAR_W)(xx, yy), seg_cov(BARS_R, BAR_W)(xx, yy)), arc_cov(xx, yy))
+    x0, y0 = int(FS_C[0] - ARC_R - 75), 1300
+    x1, y1 = int(FS_C[0] + ARC_R + 75), int(FS_C[1] + ARC_R + 12)
+    render(x0, y0, x1, y1, both)
+    return B
 
 def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True, diffuser=True):
     """anneau du footswitch : fond eteint (dans B) + source allumee + halo (calques alpha)"""
@@ -602,6 +655,7 @@ def build(write=True):
     B, ring_src, ring_halo = ring_layers(W_, B, diffuser=False)
     B = clean_bottom(B)
     B = smooth_panel_edge(B)
+    B = engrave_details(B)
     B, tick_src, tick_halo = bold_tick_layers(B)
     out_rgb = B.copy(); out_a = alpha.copy()
     # footswitch photo
