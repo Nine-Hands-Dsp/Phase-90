@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "")
 
-project(Phase90 VERSION 1.4.2 LANGUAGES C CXX)
+project(Phase90 VERSION 2.0.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -28,14 +28,24 @@ else()
   set(PHASE90_FORMATS VST3)
 endif()
 
-# visuel, calques lumineux et police intégrés au plugin (rien à installer à côté)
+# visuel, calques lumineux, potard (calques nh::Knob), polices Poppins et logo integres au plugin
 juce_add_binary_data(Phase90Assets SOURCES
-  background.jpg
-  glow_ticks.png
-  glow_foot.png
-  knob_index.png
-  knob_mark.png
-  LiberationSans-Regular.ttf)
+  background.png
+  ticks_core.png
+  ticks_glow.png
+  sync_core.png
+  sync_glow.png
+  fs_refl.png
+  knob_shadow.png
+  knob_crown.png
+  knob_cap.png
+  knob_marker.png
+  knob_highlight.png
+  Poppins-Regular.ttf
+  Poppins-Medium.ttf
+  Poppins-Bold.ttf
+  Poppins-Light.ttf
+  NineHandsLogoBlack.svg)
 
 juce_add_plugin(Phase90
   COMPANY_NAME               "NINE HANDS | DSP"

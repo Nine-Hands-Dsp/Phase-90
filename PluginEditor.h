@@ -10,8 +10,8 @@
 // PHASE 90 v2 (NINE HANDS | DSP) : pedale simple, fond 1235 x 1800 px plein cadre (repere 617,5 x 900, Layout.h).
 // Le fond (tools/make_art.py, d'apres le visuel de l'utilisateur) contient boitier, panneau, lentilles eteintes,
 // footswitch, bouton SYNC et jacks (pieces photo du kit). L'editeur dessine par-dessus : lumieres (sources + halos
-// doses par le reglage Glow), serigraphie vectorielle (Poppins), logo NINE HANDS | DSP, pastille presets / ligne
-// d'etat ; le potard SPEED est un composant nh::Knob (calques qui tournent ensemble, flou de mouvement).
+// doses par le reglage Glow), anneau du footswitch (dessin d'Octopus), serigraphie vectorielle (Poppins), logo
+// NINE HANDS | DSP (SVG officiel v003 noir), pastille presets / ligne d'etat ; le potard SPEED est un composant nh::Knob (calques qui tournent ensemble, flou de mouvement).
 //==============================================================================
 class Phase90Editor : public juce::AudioProcessorEditor,
                       private juce::Timer
@@ -26,6 +26,7 @@ public:
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override {}
     void mouseMove (const juce::MouseEvent&) override;
     void mouseExit (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
@@ -63,6 +64,7 @@ private:
     void buildPrint();
 
     void drawLights (juce::Graphics&);
+    void drawFootRing (juce::Graphics&);
     void drawPrint (juce::Graphics&);
     void drawBar (juce::Graphics&);
 
@@ -71,9 +73,11 @@ private:
     juce::Typeface::Ptr mediumFace, boldFace, lightFace, regularFace;
     std::unique_ptr<juce::Drawable> logo;
     juce::Path speedPath, darkPath, phasePath, ticksPath;      // serigraphie (unites du plugin)
+    juce::Path syncLabels[Phase90Processor::numSyncStates];    // "SYNC", "SYNC 1/4", "SYNC 1/8", "SYNC 1/2"
+    juce::Rectangle<float> syncHit;
     std::unique_ptr<nh::Knob> knob;
 
-    juce::Image background, bgScaled, ticksCore, ticksGlow, ringCore, ringGlow, syncCore, syncGlow, fsRefl;
+    juce::Image background, bgScaled, ticksCore, ticksGlow, syncCore, syncGlow, fsRefl;
     int cacheW = 0, cacheH = 0;
     float cacheScale = 0.0f, forcedScale = 0.0f;
     int resizeSettle = 0, openHeight = 0;

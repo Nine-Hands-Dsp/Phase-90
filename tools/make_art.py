@@ -32,6 +32,7 @@ D = np.asarray(Image.open(SRC).convert('RGB')).astype(np.float32)
 
 # ------------------------------------------------------------------ 1. geometrie : visuel -> image finale
 BX0, BX1, BY0, BY1 = 570.0, 1479.5, 196.5, 1832.5          # boitier (arete chromee exterieure) dans le visuel
+BY_RIM = 1862.0                                             # bas de la tranche sombre du boitier (sous l'orange) dans le visuel
 S = OUT_H / (BY1 - BY0)                                     # echelle unique (x et y)
 JACK_LEN_PX = 104.0 * 2 * S * 0.93                          # longueur des embases (le long de la tranche), px de l'image finale
 JACK_PROT = PC.jack_sprite(JACK_LEN_PX / 2.0, 2, 1)[1] * 2 - 3.0   # saillie hors du boitier (px)
@@ -57,7 +58,13 @@ def y_fwd(yd): return (yd - BY0) * S
 _xs_d = np.linspace(0, 2047, 40000)
 _xs_t = np.array([x_fwd(x) for x in _xs_d])
 def x_inv(xt): return np.interp(xt, _xs_t, _xs_d)
-def y_inv(yt): return np.asarray(yt) / S + BY0
+# bas de la pedale : la tranche du bas du visuel (BY1 -> BY_RIM) doit tenir dans l'image -> on retire une bande
+# horizontale d'orange uni (entre la cuvette du footswitch et « 90 », seuls les traits verticaux du cadre la traversent)
+Y_CUT = 1515.0                                              # image finale : debut de la bande retiree
+CUT = (BY_RIM - BY1) * S                                    # hauteur retiree (px de l'image finale)
+def y_inv(yt):
+    yt = np.asarray(yt, dtype=np.float64)
+    return np.where(yt < Y_CUT, yt, yt + CUT) / S + BY0
 
 def P(xd, yd): return (x_fwd(xd), y_fwd(yd))
 
@@ -96,7 +103,8 @@ KNOB_C = (614.5, 344.5); KNOB_R = 215.5                     # potard SPEED : axe
 TICK_C = (615.0, 343.0)                                      # graduations : 41 traits tous les 7,5 deg de -150 a +150
 TICK_SMALL = (231.0, 252.0, 2.2)                             # rayon int., rayon ext., demi-largeur (blancs)
 TICK_BOLD = (232.0, 261.0, 6.0)                              # graduations grasses (lentilles orange) tous les 30 deg
-FS_C = (613.5, 1332.0)                                       # footswitch et anneau lumineux
+FS_OLD = (613.5, 1332.0)                                     # footswitch du visuel (efface)
+FS_C = (616.5, 1303.5)                                       # footswitch : centre du cercle orange de la collerette (mesure)
 PHASE_BOX = (345.0, 752.0, 890.0, 962.0)                     # cartouche PHASE (contour orange, exterieur)
 PRESET = (617.5 - 400.0, 1060.0 - 38.0, 800.0, 76.0)         # pastille presets / ligne d'etat (400 x 38 unites)
 SYNC_C, SYNC_R = (902.0, 552.0), 30.0                        # bouton SYNC, en bas a droite du potard
@@ -104,11 +112,11 @@ JACK_Y = 852.0                                               # embases jack, a l
 TEXTS = [  # texte, police (0 medium, 1 bold, 2 light, 3 regular), hauteur des capitales (px), espacement (px), x, y, rotation
     ('SPEED', 3, 40.0, 3.0, 617.5, 603.0, 0.0),
     ('PHASE', 1, 82.0, 6.0, 617.5, 857.0, 0.0),
-    ('OUTPUT', 3, 40.0, 3.0, 122.0, 848.0, -90.0),
-    ('INPUT', 3, 40.0, 3.0, 1108.0, 852.0, 90.0),
-    ('90', 2, 84.0, 4.0, 617.5, 1597.0, 0.0),
+    ('OUTPUT', 3, 28.0, 2.5, 122.0, 848.0, -90.0),
+    ('INPUT', 3, 28.0, 2.5, 1108.0, 852.0, 90.0),
+    ('90', 2, 84.0, 4.0, 617.5, 1575.0, 0.0),
 ]
-LOGO_C, LOGO_W = (617.5, 1694.0), 300.0
+LOGO_C, LOGO_W = (617.5, 1668.0), 300.0
 
 def column_fill(img, mask):
     """remplit le masque colonne par colonne (brossage vertical) entre les pixels valides au-dessus et en dessous"""
@@ -174,11 +182,13 @@ def erase_all(W_):
     B = column_fill(W_, m)
     # lettres PHASE (interieur du cartouche, brosse vertical)
     B = column_fill(B, (xx > 382) & (xx < 853) & (yy > 791) & (yy < 927))
+    # reflet orange a gauche du cartouche PHASE (visuel asymetrique) : panneau noir brosse refait
+    B = column_fill(B, (xx > 290) & (xx < 347) & (yy > 740) & (yy < 970))
     # textes sombres sur l'orange : OUTPUT, INPUT, 90
     tm = np.zeros(B.shape[:2], bool)
-    for x0, y0, x1, y1 in ((96, 728, 150, 995), (1080, 758, 1138, 952), (500, 1535, 740, 1665)):
+    for x0, y0, x1, y1 in ((96, 728, 150, 995), (1080, 758, 1138, 952), (500, 1512, 740, 1640)):
         tm[y0:y1, x0:x1] = True
-    return grain_fill(B, tm, (300, 1600, 460, 1700))
+    return grain_fill(B, tm, (300, 1570, 460, 1670))
 
 if __name__ == '__main__' and 'erase' in sys.argv:
     B = erase_all(warp_design())
@@ -186,13 +196,14 @@ if __name__ == '__main__' and 'erase' in sys.argv:
 
 
 # ------------------------------------------------------------------ 3. lumieres, footswitch, jacks, detourage
-RING_R0, RING_R1 = 113.0, 149.0                              # anneau lumineux du footswitch (diffuseur)
+RING_R0, RING_R1 = 113.0, 149.0                              # ancien anneau lumineux du visuel (efface)
+GRAIN_BOX = (180, 1320, 300, 1440)                           # orange propre (grain repris pour la collerette du footswitch)
 FS_FLATS = 206.0                                             # footswitch photo : distance entre plats (px)
 
 def sstep(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
 
-def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True):
+def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True, diffuser=True):
     """anneau du footswitch : fond eteint (dans B) + source allumee + halo (calques alpha)"""
     C = FS_C if C is None else C
     RING_R0 = globals()['RING_R0'] if R0 is None else R0
@@ -240,9 +251,22 @@ def ring_layers(D_lit, B, C=None, R0=None, R1=None, collar=True):
     dif = dif + spec[..., None]
     rng = np.random.default_rng(7)
     dif = dif + rng.normal(0, 1.4, (Hh, Ww, 1))
-    off = off * (1 - band[..., None]) + dif * band[..., None]
+    if diffuser:
+        off = off * (1 - band[..., None]) + dif * band[..., None]
+    else:
+        # footswitch facon Octopus : plus de diffuseur ni de cuvette ; l'ecrou est pose sur l'orange uni de la
+        # collerette (meme centre que le cercle orange). La lumiere est l'anneau fin dessine par le plugin dans la gorge.
+        RE = RING_R1 + 8.0
+        old = np.hypot(xx - FS_OLD[0], yy - FS_OLD[1]) < RING_R1 + 10.0     # ancien footswitch + anneau du visuel
+        ob = (r < RE) | old
+        tmp = off.copy()
+        tmp[ob] = inp[ob]
+        clean = grain_fill(tmp, ob.astype(np.float32), GRAIN_BOX, seed=5)
+        # fondu large vers l'orange d'origine (pas de bord de disque visible)
+        w_ = np.maximum(1 - sstep(RE - 18.0, RE + 2.0, r), cv2.GaussianBlur(old.astype(np.float32), (0, 0), 2.0))
+        off = off * (1 - w_[..., None]) + clean * w_[..., None]
     # creux sous le footswitch (cache par l'ecrou)
-    hole = 1 - sstep(RING_R0 - 3, RING_R0 - 0.5, r)
+    hole = (1 - sstep(RING_R0 - 3, RING_R0 - 0.5, r)) * (1.0 if diffuser else 0.0)
     off = off * (1 - hole[..., None]) + np.array([8.0, 7.0, 7.0]) * hole[..., None]
     # --- source allumee : diffuseur blanc chaud au centre de la bande, orange vers les bords
     hot = np.array([255.0, 246.0, 222.0]); edge = np.array([255.0, 150.0, 60.0])
@@ -344,18 +368,56 @@ def crop_layer(rgba, pad=2):
 def save_rgba(path, rgba):
     Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), 'RGBA').save(path, optimize=True)
 
-SYNC_R0, SYNC_R1 = 24.0, 31.0                                # anneau lumineux du bouton SYNC
-SYNC_BTN = 21.0                                              # rayon du bouton (metal tourne, photo du footswitch du kit)
+LED_R = 19.0                                                 # LED SYNC (photo de l'utilisateur, assets/kit/led_red_lit.png) : rayon de la lentille
+SYNC_R1 = LED_R + 3.0                                        # zone cliquable / position de l'inscription
 
-def sync_button():
-    """petit bouton-poussoir : le bouton en metal tourne de la photo du footswitch, sans l'ecrou, avec ombre"""
-    k = SYNC_BTN / PC.FS_BTN_PX
-    n = int(round(SYNC_BTN * 2 * 1.9))
-    rgb, a = PC._place(PC._load('footswitch_photo.png'), PC.FS_C, k, n)
-    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
-    rr = np.hypot(xx - n / 2 + 0.5, yy - n / 2 + 0.5)
-    a = a * np.clip(SYNC_BTN - rr + 0.5, 0, 1)
-    return PC._with_shadow(rgb, a, 2 * SYNC_BTN, 0.55)
+def led_layers():
+    """LED rouge de l'utilisateur a la place du bouton SYNC : eteinte (fond), allumee (source) et halo (dose par Glow)"""
+    src = np.asarray(Image.open(os.path.join(ROOT, 'assets', 'kit', 'led_red_lit.png')).convert('RGBA')).astype(np.float32)
+    n0 = src.shape[0]; R0_ = 47.0                                # lentille : disque de 94 px centre dans 150 px
+    k = LED_R / R0_
+    n = int(round(n0 * k)) | 1
+    lit = cv2.resize(src, (n, n), interpolation=cv2.INTER_AREA)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32) + 0.5
+    rr = np.hypot(xx - n / 2, yy - n / 2)
+    lens = np.clip(LED_R - rr + 0.5, 0, 1)
+    lit[..., 3] = lit[..., 3] * lens
+    # eteinte : verre rouge sombre (meme lentille, sans lumiere interne), petit reflet fixe en haut a gauche
+    off = lit.copy()
+    lum = off[..., :3].mean(2, keepdims=True) / 255.0
+    off[..., :3] = np.array([70.0, 8.0, 6.0]) * (0.35 + 0.65 * lum) + 6.0
+    ang = np.arctan2(yy - n / 2, xx - n / 2)
+    spec = np.exp(-(((xx - n / 2 + LED_R * 0.38) ** 2 + (yy - n / 2 + LED_R * 0.42) ** 2) / (2 * (LED_R * 0.18) ** 2)))
+    off[..., :3] = off[..., :3] + spec[..., None] * 120.0
+    off[..., 3] = 255.0 * lens
+    # siege noir autour de la lentille + ombre de contact (lumiere en haut a gauche)
+    m = n + 16
+    seat = np.zeros((m, m, 4), np.float32)
+    y2, x2 = np.mgrid[0:m, 0:m].astype(np.float32) + 0.5
+    r2 = np.hypot(x2 - m / 2, y2 - m / 2)
+    rs = np.hypot(x2 - m / 2 - 1.6, y2 - m / 2 - 2.0)
+    sh = np.clip((LED_R + 6.0 - rs) / 4.0, 0, 1) * 0.55
+    ring = np.clip(LED_R + 2.2 - r2 + 0.5, 0, 1)
+    seat[..., :3] = 10.0; seat[..., 3] = np.maximum(sh, ring) * 255.0
+    def over(base, top, o):
+        out = base.copy(); h = top.shape[0]
+        a_ = top[..., 3:4] / 255.0
+        reg = out[o:o + h, o:o + h]
+        rgb = reg[..., :3] * (1 - a_) + top[..., :3] * a_
+        al = reg[..., 3:4] + top[..., 3:4] * (1 - reg[..., 3:4] / 255.0)
+        out[o:o + h, o:o + h] = np.concatenate([rgb, al], 2); return out
+    off_s = over(seat, off, 8)
+    lit_s = np.zeros_like(seat); lit_s = over(lit_s, lit, 8)
+    # halo : la facade recoit la lumiere rouge (serre + large et faible), symetrique
+    H = int(LED_R * 9) | 1
+    y3, x3 = np.mgrid[0:H, 0:H].astype(np.float32) + 0.5
+    d = np.clip(np.hypot(x3 - H / 2, y3 - H / 2) - LED_R, 0, None)
+    a_h = np.clip(0.75 * np.exp(-d / 5.0) + 0.38 * np.exp(-d / 18.0) + 0.08 * np.exp(-d / 50.0), 0, 0.92)
+    a_h = a_h * (1 - sstep(H / 2 - 16, H / 2 - 1, np.hypot(x3 - H / 2, y3 - H / 2)))
+    mixc = np.exp(-d / 10.0)[..., None]
+    col = np.array([255.0, 120.0, 90.0]) * mixc + np.array([255.0, 30.0, 18.0]) * (1 - mixc)
+    halo = np.dstack([col, a_h * 255])
+    return off_s, lit_s, halo
 
 def fs_layers():
     """footswitch photo du kit + reflet orange de l'anneau sur l'ecrou (calque en fondu avec l'anneau)"""
@@ -376,16 +438,21 @@ def build(write=True):
     W_ = warp_design()
     B = erase_all(W_)
     alpha = box_alpha(W_)
-    B, ring_src, ring_halo = ring_layers(W_, B)
+    B, ring_src, ring_halo = ring_layers(W_, B, diffuser=False)
     B, tick_src, tick_halo = bold_tick_layers(B)
-    B, sync_src, sync_halo = ring_layers(W_, B, SYNC_C, SYNC_R0, SYNC_R1, collar=False)
     out_rgb = B.copy(); out_a = alpha.copy()
     # footswitch photo
     fs, fs_refl, btn = fs_layers()
     n = fs.shape[0]
     place(out_rgb, None, fs, FS_C[0] - n / 2, FS_C[1] - n / 2)
-    sb = sync_button(); m_ = sb.shape[0]
-    place(out_rgb, None, sb, SYNC_C[0] - m_ / 2, SYNC_C[1] - m_ / 2)
+    led_off, led_lit, led_halo = led_layers(); m_ = led_off.shape[0]
+    place(out_rgb, None, led_off, SYNC_C[0] - m_ / 2, SYNC_C[1] - m_ / 2)
+    Hh_, Ww_ = out_rgb.shape[:2]
+    def full(spr):
+        canvas = np.zeros((Hh_, Ww_, 4), np.float32); h = spr.shape[0]
+        y0, x0 = int(round(SYNC_C[1] - h / 2)), int(round(SYNC_C[0] - h / 2))
+        canvas[y0:y0 + h, x0:x0 + h] = spr; return canvas
+    sync_src, sync_halo = full(led_lit), full(led_halo)
     # embases jack photo : IN a droite, OUT a gauche, sans ombre (tranches)
     jl = JACK_LEN_PX
     jr, jw, jh = PC.jack_sprite(jl, 1, 1)
@@ -396,7 +463,7 @@ def build(write=True):
     bg = np.dstack([out_rgb * out_a[..., None], out_a * 255])
     # couleur premultipliee -> droite
     bg[..., :3] = np.where(out_a[..., None] > 1e-4, bg[..., :3] / np.maximum(out_a, 1e-4)[..., None], 0)
-    layers = {'ring_core': ring_src, 'ring_glow': ring_halo, 'ticks_core': tick_src, 'ticks_glow': tick_halo,
+    layers = {'ticks_core': tick_src, 'ticks_glow': tick_halo,
               'sync_core': sync_src, 'sync_glow': sync_halo}
     info = {'fsBtnR': float(btn), 'fsSprite': float(n)}
     if write:
@@ -432,11 +499,12 @@ def write_layout(info):
                     u(KNOB_RS) * LAYER / KNOB_LR, u(KNOB_RS) * LAYER / KNOB_LR],
         'ticks': small_ticks(),
         'fs': [u(FS_C[0]), u(FS_C[1]), u(info['fsBtnR']), u(FS_FLATS / 2)],
+        'fsRing': [u(info['fsBtnR']) * 40.45 / 37.54, u(info['fsBtnR']) * 2.53 / 37.54],
         'sync': [u(SYNC_C[0]), u(SYNC_C[1]), u(SYNC_R1 + 4)],
         'phaseBox': [u(PHASE_BOX[0]), u(PHASE_BOX[1]), u(PHASE_BOX[2] - PHASE_BOX[0]), u(PHASE_BOX[3] - PHASE_BOX[1])],
         'preset': [u(PRESET[0]), u(PRESET[1]), u(PRESET[2]), u(PRESET[3])],
         'texts': [[t, f, u(ch), u(tr), u(x), u(y), rot] for (t, f, ch, tr, x, y, rot) in TEXTS],
-        'syncLabel': [u(SYNC_C[0]), u(SYNC_C[1] + SYNC_R1 + 26), u(18.0)],
+        'syncLabel': [u(SYNC_C[0]), u(SYNC_C[1] + SYNC_R1 + 24), u(18.0)],
         'logo': [u(LOGO_C[0]), u(LOGO_C[1]), u(LOGO_W)],
         'layers': {k: [u(v[0]), u(v[1]), u(v[2]), u(v[3])] for k, v in info['layers'].items()},
         'jackY': u(JACK_Y),
@@ -451,11 +519,12 @@ def write_layout(info):
          '    const juce::Point<float> knobPos { %s, %s }; const float knobR = %s;   // axe du potard SPEED' % (f(lay['knob'][0]), f(lay['knob'][1]), f(lay['knob'][2])),
          '    const juce::Rectangle<float> knobBox %s;   // composant nh::Knob (calques 1024 px)' % rect(lay['knobBox']),
          '    const juce::Point<float> fsPos { %s, %s }; const float footR = %s;' % (f(lay['fs'][0]), f(lay['fs'][1]), f(lay['fs'][2])),
+         '    const float fsRingR = %s, fsRingW = %s;   // anneau lumineux dans la gorge du footswitch (dessin d\'Octopus)' % (f(lay['fsRing'][0]), f(lay['fsRing'][1])),
          '    const juce::Point<float> syncPos { %s, %s }; const float syncR = %s;' % (f(lay['sync'][0]), f(lay['sync'][1]), f(lay['sync'][2])),
          '    const juce::Rectangle<float> phaseBox %s;' % rect(lay['phaseBox']),
          '    const juce::Rectangle<float> presetRect %s;   // pastille presets / ligne d\'etat (400 x 38)' % rect(lay['preset']),
          '    const float presetFont = 23.0f;']
-    for k in ('ring_core', 'ring_glow', 'ticks_core', 'ticks_glow', 'sync_core', 'sync_glow', 'fs_refl'):
+    for k in ('ticks_core', 'ticks_glow', 'sync_core', 'sync_glow', 'fs_refl'):
         h.append('    const juce::Rectangle<float> %s %s;' % (k.replace('_c', 'C').replace('_g', 'G').replace('_r', 'R'), rect(L_[k])))
     h.append('    struct Txt { const char* s; int font; float capH, track, x, y, rot; };   // font : 0 medium, 1 bold, 2 light, 3 regular')
     h.append('    const Txt texts[] = {')
@@ -610,6 +679,7 @@ if __name__ == '__main__' and 'knob' in sys.argv:
 
 if __name__ == '__main__' and 'build' in sys.argv:
     bg, layers, refl, info = build()
-    build_knob(warp_design())
+    import knob_layers                      # potard SPEED : calques ChatGPT fournis par l'utilisateur (tools/knob_layers.py)
+    knob_layers.build()
     write_layout(info)
     print(info)

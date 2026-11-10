@@ -4,21 +4,23 @@
 
 namespace nh
 {
+struct KnobStyle      // hors de la classe : GCC / Clang refusent `Style s = {}` sur une struct interne a initialiseurs
+{
+    float startAngle = juce::degreesToRadians (-135.0f);
+    float endAngle   = juce::degreesToRadians ( 135.0f);
+    juce::Point<float> shadowOffset { 0.025f, 0.025f };   // lumiere en haut a gauche a 45 deg -> ombre a 45 deg vers le bas a droite
+    float blurMax    = juce::degreesToRadians (40.0f);
+    float blurStep   = juce::degreesToRadians (3.0f);
+    float blurDecay  = 0.6f;
+    float dragPixels = 250.0f;
+};
+
 class Knob : public juce::Component, private juce::Timer
 {
 public:
     struct Layers { juce::Image shadow, crown, cap, wear, marker, highlight; };
 
-    struct Style
-    {
-        float startAngle = juce::degreesToRadians (-135.0f);
-        float endAngle   = juce::degreesToRadians ( 135.0f);
-        juce::Point<float> shadowOffset { 0.025f, 0.025f };   // lumiere en haut a gauche a 45 deg -> ombre a 45 deg vers le bas a droite
-        float blurMax    = juce::degreesToRadians (40.0f);
-        float blurStep   = juce::degreesToRadians (3.0f);
-        float blurDecay  = 0.6f;
-        float dragPixels = 250.0f;
-    };
+    using Style = KnobStyle;
 
     Knob (juce::RangedAudioParameter& p, Layers l, Style s = {})
         : param (p), layers (std::move (l)), style (s),

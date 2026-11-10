@@ -33,8 +33,22 @@ Lr = LAY['layers']
 tick = (0.40 + 0.60 * (1 - LFO)) if ON else 0.0
 paste('ticks_glow.png', Lr['ticks_glow'], tick * GLOW); paste('ticks_core.png', Lr['ticks_core'], tick)
 if ON:
-    paste('ring_glow.png', Lr['ring_glow'], GLOW); paste('ring_core.png', Lr['ring_core'])
-    paste('fs_refl.png', Lr['fs_refl'], 0.8)
+    paste('fs_refl.png', Lr['fs_refl'], 0.5)
+    # anneau du footswitch (dessin d'Octopus) : halo dose par Glow, trait net, coeur clair
+    fx, fy, fR, fW = LAY['fs'][0], LAY['fs'][1], LAY['fsRing'][0], LAY['fsRing'][1]
+    cv = np.asarray(canvas).astype(np.float32)
+    yy, xx = np.mgrid[0:cv.shape[0], 0:cv.shape[1]].astype(np.float32)
+    dd = np.abs(np.hypot(xx / K - fx, yy / K - fy) - fR) * K
+    def stroke(col, a, w):
+        cov = np.clip(w * K / 2 - dd + 0.5, 0, 1)[..., None] * a
+        cv[..., :3] = cv[..., :3] * (1 - cov) + np.array(col, np.float32) * cov
+    kr = fR / 33.2
+    hw = 20.0
+    while hw > 3.0:
+        stroke((255, 128, 36), min(1.0, 0.075 * GLOW), hw * kr); hw -= 1.5
+    stroke((255, 128, 36), 0.85, fW)
+    stroke((255, 214, 160), 0.9, fW * 0.42)
+    canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8), 'RGBA')
 if SYNC > 0:
     paste('sync_glow.png', Lr['sync_glow'], GLOW); paste('sync_core.png', Lr['sync_core'])
 
@@ -113,13 +127,9 @@ else:
         cx = R(px + pw / 2 + sgn * (pw / 2 - 17)); cy = R(py + ph / 2); r = R(5.5)
         d.polygon([(cx + sgn * r, cy), (cx - sgn * r * 0.6, cy - r), (cx - sgn * r * 0.6, cy + r)], fill=(150, 150, 156, 255))
 canvas.alpha_composite(big.resize(canvas.size, Image.LANCZOS))
-# logo NINE HANDS | DSP noir (lettres noires, barre grise #919496) sur l'orange
+# logo officiel NINE HANDS | DSP noir (NineHands_LogoPP_v003_FullBlack.svg) sur l'orange
 lx, ly, lw = LAY['logo']
-logo = load(os.path.join('assets', 'nine_hands_logo_blanc.png'))
-la = np.asarray(logo).astype(np.float32)
-white = (la[..., :3].min(2) > 200)[..., None]
-la[..., :3] = np.where(white, np.array([20.0, 8.0, 3.0]), la[..., :3])
-logo = Image.fromarray(la.astype(np.uint8), 'RGBA')
+logo = load(os.path.join('assets', 'nine_hands_logo_noir.png'))
 logo = logo.resize((int(lw * K), int(round(logo.height * lw * K / logo.width))), Image.LANCZOS)
 canvas.alpha_composite(logo, (int(lx * K - logo.width / 2), int(ly * K - logo.height / 2)))
 os.makedirs(os.path.dirname(out), exist_ok=True)
