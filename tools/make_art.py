@@ -716,7 +716,7 @@ def write_layout(info):
                     u(KNOB_RS) * LAYER / KNOB_LR, u(KNOB_RS) * LAYER / KNOB_LR],
         'ticks': small_ticks(),
         'fs': [u(FS_C[0]), u(FS_C[1]), u(info['fsBtnR']), u(FS_FLATS / 2)],
-        'fsRing': [u(info['fsBtnR']) * 40.45 / 37.54, u(info['fsBtnR']) * 2.53 / 37.54],
+        'fsRing': [u(info['fsBtnR']) * 40.45 / 37.54 - 1.0, u(info['fsBtnR']) * 2.53 / 37.54],   # resserre de 1 px vers l'interieur (demande)
         'sync': [u(SYNC_C[0]), u(SYNC_C[1]), u(SYNC_R1 + 4)],
         'phaseBox': [u(PHASE_BOX[0]), u(PHASE_BOX[1]), u(PHASE_BOX[2] - PHASE_BOX[0]), u(PHASE_BOX[3] - PHASE_BOX[1])],
         'preset': [u(PRESET[0]), u(PRESET[1]), u(PRESET[2]), u(PRESET[3])],
