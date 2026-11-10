@@ -4,10 +4,9 @@
 
 namespace p9ui
 {
-// tailles de fenêtre identiques à Small Tone / Holyverb (et Freeze Shimmer / Tuna) :
-// 100 % = 986 px de haut, ouverture par défaut = 493 px (= taille minimale)
-constexpr int heightDefault = 493, height60 = 592, height75 = 740, height100 = 986, heightMax = 1479;
-// tailles du menu « Plugin size » : 0 = 60 % (taille par défaut d'origine), 1 = 75 %, 2 = 100 %
+// pedale simple NINE HANDS | DSP (Echoflex, Holyverb, Screamer, Small Tone) : ouverture par defaut 493 px (« 60 % »,
+// = taille minimale), 75 % = 719 px, 100 % = 958 px, jusqu'a 150 %
+constexpr int heightDefault = 493, height75 = 719, height100 = 958, heightMax = 1437;
 constexpr int numSizes = 3;
 constexpr int sizeHeights[numSizes] = { heightDefault, height75, height100 };
 }
@@ -62,6 +61,11 @@ public:
     // ----- MIDI
     std::atomic<int> ccFoot { -1 }, ccSpeed { -1 }, ccVoice { -1 }, ccSync { -1 };   // aucun CC par défaut (MIDI Learn)
     std::atomic<int> learnTarget { -1 };      // 0 foot, 1 speed, 2 script/block, 3 sync
+    static constexpr int numLearn = 4;
+    static const char* learnName (int i);
+    std::atomic<int>& ccOf (int i) { return i == 0 ? ccFoot : i == 1 ? ccSpeed : i == 2 ? ccVoice : ccSync; }
+    void clearMidi() { ccFoot = -1; ccSpeed = -1; ccVoice = -1; ccSync = -1; }
+    std::atomic<int> presetCounter { 0 };    // incremente a chaque chargement de preset (la barre de presets reste affichee)
     std::atomic<int> lastLearned { -1 };      // pour l'affichage
     std::atomic<int> uiHeight { 0 };     // 0 = pas de taille sauvegardée pour cette instance -> taille par défaut des nouvelles fenêtres
 

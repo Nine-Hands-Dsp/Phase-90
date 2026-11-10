@@ -91,6 +91,12 @@ double Phase90Processor::syncDivisionBeats (int i)
     static const double b[] = { 0.0, 1.0, 0.5, 2.0 };       // durée d'un cycle, en temps (noires)
     return b[jlimit (0, numSyncStates - 1, i)];
 }
+const char* Phase90Processor::learnName (int i)
+{
+    static const char* n[numLearn] = { "Footswitch", "Speed", "Script / Block", "Sync button" };
+    return n[jlimit (0, numLearn - 1, i)];
+}
+
 void Phase90Processor::cycleSync()
 {
     setParam ("syncdiv", (float) ((syncState() + 1) % numSyncStates));
@@ -251,6 +257,7 @@ void Phase90Processor::applyPreset (float speed, bool block, int sync, const Str
     setParam ("syncdiv", (float) jlimit (0, numSyncStates - 1, sync));
     setParam ("on", 1.0f);
     presetName = name;
+    presetCounter.fetch_add (1);
 }
 
 //==============================================================================
@@ -304,6 +311,7 @@ void Phase90Processor::saveUserPreset (int slot, const String& name)
     f.getParentDirectory().createDirectory();
     x->writeTo (f);
     presetName = name;
+    presetCounter.fetch_add (1);
 }
 
 //==============================================================================
