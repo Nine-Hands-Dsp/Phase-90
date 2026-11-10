@@ -7,7 +7,7 @@ namespace layout
     const juce::Point<float> knobPos { 307.25f, 172.25f }; const float knobR = 107.75f;   // axe du potard SPEED
     const juce::Rectangle<float> knobBox { 173.35f, 38.35f, 267.81f, 267.81f };   // composant nh::Knob (calques 1024 px)
     const juce::Point<float> fsPos { 308.25f, 651.75f }; const float footR = 39.02f;
-    const float fsRingR = 41.04f, fsRingW = 2.63f;   // anneau lumineux dans la gorge du footswitch (dessin d'Octopus)
+    const float fsRingR = 39.04f, fsRingW = 2.63f;   // anneau lumineux dans la gorge du footswitch (dessin d'Octopus)
     const juce::Point<float> syncPos { 451.00f, 276.00f }; const float syncR = 13.00f;
     const juce::Rectangle<float> phaseBox { 172.50f, 376.00f, 272.50f, 105.00f };
     const juce::Rectangle<float> presetRect { 108.75f, 511.00f, 400.00f, 38.00f };   // pastille presets / ligne d'etat (400 x 38)
