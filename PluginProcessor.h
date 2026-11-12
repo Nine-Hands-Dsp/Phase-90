@@ -67,6 +67,7 @@ public:
     void clearMidi() { ccFoot = -1; ccSpeed = -1; ccVoice = -1; ccSync = -1; }
     std::atomic<int> presetCounter { 0 };    // incremente a chaque chargement de preset (la barre de presets reste affichee)
     std::atomic<int> lastLearned { -1 };      // pour l'affichage
+    std::atomic<int> uiSizeIdx { -1 };   // taille choisie au menu pour ce projet (0..2), -1 = taille par defaut choisie
     std::atomic<int> uiHeight { 0 };     // 0 = pas de taille sauvegardée pour cette instance -> taille par défaut des nouvelles fenêtres
 
     // ----- infos pour l'interface

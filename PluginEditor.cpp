@@ -59,13 +59,12 @@ Phase90Editor::Phase90Editor (Phase90Processor& p)
 
     // taille : 493 px par defaut (« 60 % ») = taille minimale, proportions bloquees
     const double aspect = (double) baseW / (double) baseH;
-    const int saved = proc.uiHeight.load();
-    const int h0 = saved > 0 ? jlimit (p9ui::heightDefault, p9ui::heightMax, saved)
-                             : sizeHeight (WigaWindowSize::defaultIndex (JucePlugin_Name, p9ui::numSizes));
+    const int h0 = sizeHeight (NineHandsWindow::openIndex (JucePlugin_Name, proc.uiSizeIdx.load(), p9ui::numSizes));
     setResizable (true, true);
     setResizeLimits (roundToInt (p9ui::heightDefault * aspect), p9ui::heightDefault,
                      roundToInt (p9ui::heightMax * aspect), p9ui::heightMax);
     getConstrainer()->setFixedAspectRatio (aspect);
+    hostLock.setLimits (roundToInt (p9ui::heightDefault * aspect), p9ui::heightDefault, roundToInt (p9ui::heightMax * aspect), p9ui::heightMax);
     setOpaque (true);
     openHeight = h0;
     setSize (roundToInt (h0 * aspect), h0);
@@ -104,7 +103,7 @@ void Phase90Editor::useSoftwareRenderer()
    #endif
 }
 
-void Phase90Editor::parentHierarchyChanged() { useSoftwareRenderer(); }
+void Phase90Editor::parentHierarchyChanged() { useSoftwareRenderer(); hostLock.track (*this); }
 void Phase90Editor::visibilityChanged()      { useSoftwareRenderer(); if (isShowing()) repaint(); }
 
 float Phase90Editor::physicalScale() const
@@ -121,9 +120,7 @@ void Phase90Editor::askRepaint (Rectangle<float> u)
 
 void Phase90Editor::resized()
 {
-    // jamais de setSize ici ; taille de l'instance enregistree seulement si elle a ete changee
-    if (proc.uiHeight.load() > 0 || (openHeight > 0 && std::abs (getHeight() - openHeight) > 2))
-        proc.uiHeight.store (jlimit (p9ui::heightDefault, p9ui::heightMax, getHeight()));
+    // jamais de setSize ici ; seules les tailles choisies au menu sont enregistrees (pas celles tirees au coin)
     if (knob != nullptr)
         knob->setBounds (layout::knobBox.transformedBy (AffineTransform::scale (k())).toNearestInt());
     resizeSettle = 4;
@@ -133,6 +130,7 @@ void Phase90Editor::setWindowHeight (int h)
 {
     h = jlimit (p9ui::heightDefault, p9ui::heightMax, h);
     setSize (roundToInt ((double) h * baseW / baseH), h);
+    hostLock.enforce();
 }
 
 void Phase90Editor::rebuildCaches (float sc)
@@ -258,6 +256,7 @@ void Phase90Editor::timerCallback()
 {
     const double now = Time::getMillisecondCounterHiRes();
     if (getPeer() != lastPeer || now - lastRendererCheckMs > 1000.0) { lastRendererCheckMs = now; useSoftwareRenderer(); }
+    hostLock.track (*this);
     if (resizeSettle > 0 && --resizeSettle == 0) rebuildCaches();
     else if (resizeSettle == 0 && now - lastScaleCheckMs > 250.0)
     {
@@ -606,7 +605,7 @@ void Phase90Editor::showPresetMenu()
 //==============================================================================
 // Menu clic droit (design d'Octopus, NineHandsMenu.h), toujours ouvert a l'endroit du clic
 //==============================================================================
-void Phase90Editor::showContextMenu (int learnIdx)
+PopupMenu Phase90Editor::buildContextMenu (int learnIdx)
 {
     using namespace NineHandsMenu;
     PopupMenu menu;
@@ -615,42 +614,17 @@ void Phase90Editor::showContextMenu (int learnIdx)
     const int lt = proc.learnTarget.load();
     if (learnIdx >= 0)
     {
+        // menu d'une commande (tronc commun) : en-tete, MIDI Learn, Clear MIDI, Cancel MIDI learn
         const String name = Phase90Processor::learnName (learnIdx);
         const int ico = learnIdx == 0 ? icoPedal : learnIdx == 1 ? icoKnob : learnIdx == 2 ? icoSwitch : icoSettings;
         addHeader (menu, menuLnf.f, ico, menuAccent, name, "MIDI: " + ccText (learnIdx));
         menu.addItem (1000 + learnIdx, "MIDI Learn: " + name, true, lt == learnIdx);
         menu.addItem (1100 + learnIdx, "Clear MIDI: " + name, proc.ccOf (learnIdx).load() >= 0);
-        if (lt >= 0) menu.addItem (1200, "Cancel MIDI learn");
-        menu.addSeparator();
+        menu.addItem (1200, "Cancel MIDI learn", lt >= 0);
+        return menu;
     }
-    else
-        addHeader (menu, menuLnf.f, icoPedal, menuAccent, "Phase 90", "Phaser  v" + String (JucePlugin_VersionString));
 
-    PopupMenu sizes, defSizes;
-    {
-        const char* names[p9ui::numSizes] = { "60 %", "75 %", "100 %" };
-        const int def = WigaWindowSize::defaultIndex (JucePlugin_Name, p9ui::numSizes);
-        for (int i = 0; i < p9ui::numSizes; ++i)
-        {
-            sizes.addItem (1 + i, String (names[i]) + (i == def ? "  (default)" : ""), true, std::abs (getHeight() - sizeHeight (i)) <= 2);
-            defSizes.addItem (20 + i, names[i], true, i == def);
-        }
-        sizes.addSeparator();
-        sizes.addSubMenu ("Default size (new windows)", defSizes);
-    }
-    menu.addSubMenu ("Plugin size", sizes);
-    PopupMenu glowM;                   // intensite du halo des lumieres (regle des skills, nov. 2026)
-    {
-        const int now = roundToInt (glow * 100.0f);
-        for (int i = 0; i < NineHandsGlow::numSteps; ++i)
-        {
-            const int pc = NineHandsGlow::steps[i];
-            glowM.addItem (60 + i, "Glow " + String (pc) + " %" + (pc == 100 ? "  (default)" : ""), true, now == pc);
-        }
-    }
-    menu.addSubMenu ("Glow (halo of the lights)", glowM);
-    menu.addSeparator();
-
+    addHeader (menu, menuLnf.f, icoPedal, menuAccent, "Phase 90", "Phaser  v" + String (JucePlugin_VersionString));
     PopupMenu factory;
     const auto& fp = Phase90Processor::factoryPresets();
     for (int i = 0; i < (int) fp.size(); ++i)
@@ -660,8 +634,8 @@ void Phase90Editor::showContextMenu (int learnIdx)
     for (int s = 1; s <= 9; ++s)
     {
         const auto n = proc.userPresetName (s);
-        load.addItem (200 + s, "User " + String (s) + (n.isNotEmpty() ? "  " + n : String ("  (empty)")), n.isNotEmpty());
-        save.addItem (300 + s, "User " + String (s) + (n.isNotEmpty() ? "  " + n + "  (overwrite)" : String()));
+        load.addItem (200 + s, "User " + String (s) + (n.isNotEmpty() ? " : " + n : String ("  (empty)")), n.isNotEmpty());
+        save.addItem (300 + s, "User " + String (s) + (n.isNotEmpty() ? " : " + n + "  (overwrite)" : String()));
     }
     menu.addSubMenu ("Load user preset", load);
     menu.addSubMenu ("Save user preset", save);
@@ -678,27 +652,31 @@ void Phase90Editor::showContextMenu (int learnIdx)
     settings.addItem (502, "Stereo spread (right channel LFO inverted)", true, flag ("stereo"));
     settings.addItem (504, "Speed ring pulses with the LFO", true, flag ("ticklfo"));
     menu.addSubMenu ("Settings", settings);
+    menu.addSeparator();
 
-    PopupMenu midi, chan;
-    const int ch = (int) proc.apvts.getRawParameterValue ("midichan")->load();
-    chan.addItem (600, "MIDI channel omni", true, ch == 0);
-    for (int c = 1; c <= 16; ++c) chan.addItem (600 + c, "MIDI channel " + String (c), true, ch == c);
-    midi.addSubMenu ("MIDI channel", chan);
+    PopupMenu midi;
     midi.addSectionHeader ("MIDI Learn");
     for (int i = 0; i < Phase90Processor::numLearn; ++i)
         midi.addItem (1000 + i, "Learn: " + String (Phase90Processor::learnName (i)) + "  (" + ccText (i) + ")", true, lt == i);
     midi.addSeparator();
-    if (lt >= 0) midi.addItem (1200, "Cancel MIDI learn");
+    midi.addItem (1200, "Cancel MIDI learn", lt >= 0);
     midi.addItem (1201, "Clear all MIDI assignments");
     midi.addSeparator();
-    const bool mom = flag ("ccmomentary");
-    midi.addItem (710, "MIDI footswitch latching (127 = on / 0 = off)", true, ! mom);
-    midi.addItem (711, "MIDI footswitch momentary (toggle each press)", true, mom);
-    midi.addItem (911, "Program Change 1-" + String ((int) fp.size()) + "  Factory presets", false);
+    NineHandsWindow::addMidiFootswitchMode (midi, ! flag ("ccmomentary"));
+    midi.addSeparator();
+    NineHandsWindow::addProgramChangeInfo (midi);
     menu.addSubMenu ("MIDI", midi);
     menu.addSeparator();
-    menu.addItem (999, "Phase 90 v" + String (JucePlugin_VersionString) + "  NINE HANDS | DSP", false);
 
+    const char* names[p9ui::numSizes] = { "60 %", "75 %", "100 %" };
+    menu.addSubMenu ("Plugin size", NineHandsWindow::sizeMenu (JucePlugin_Name, p9ui::numSizes, names, p9ui::sizeHeights, getHeight()));
+    menu.addSubMenu ("Glow intensity", NineHandsWindow::glowMenu (roundToInt (glow * 100.0f)));
+    return menu;
+}
+
+void Phase90Editor::showContextMenu (int learnIdx)
+{
+    auto menu = buildContextMenu (learnIdx);
     menu.showMenuAsync (PopupMenu::Options().withMousePosition(),       // toujours la ou l'on clique
         [safe = Component::SafePointer<Phase90Editor> (this)] (int r)
         {
@@ -706,18 +684,11 @@ void Phase90Editor::showContextMenu (int learnIdx)
             auto& ed = *safe;
             auto& pr = ed.proc;
             auto toggleFlag = [&] (const char* id) { ed.setParam (id, pr.apvts.getRawParameterValue (id)->load() > 0.5f ? 0.0f : 1.0f); };
-            if      (r >= 1 && r < 1 + p9ui::numSizes) ed.setWindowHeight (sizeHeight (r - 1));
-            else if (r >= 20 && r < 20 + p9ui::numSizes)
-            {
-                WigaWindowSize::setDefaultIndex (JucePlugin_Name, r - 20);
-                ed.setWindowHeight (sizeHeight (r - 20));
-            }
-            else if (r >= 60 && r < 60 + NineHandsGlow::numSteps)
-            {
-                ed.setGlowPercent (NineHandsGlow::steps[r - 60]);
-                ed.flash ("Glow  " + String (NineHandsGlow::steps[r - 60]) + " %");
-            }
-            else if (r >= 100 && r < 200)
+            int inst = pr.uiSizeIdx.load();
+            const int sz = NineHandsWindow::handleSize (r, JucePlugin_Name, p9ui::numSizes, inst);
+            if (sz >= 0) { pr.uiSizeIdx = inst; ed.setWindowHeight (sizeHeight (sz)); return; }
+            if (const int pc = NineHandsWindow::handleGlow (r, JucePlugin_Name)) { ed.setGlowPercent (pc); ed.flash ("Glow  " + String (pc) + " %"); return; }
+            if (r >= 100 && r < 200)
             {
                 pr.setCurrentProgram (r - 100);
                 pr.updateHostDisplay (AudioProcessor::ChangeDetails().withProgramChanged (true));
@@ -728,8 +699,7 @@ void Phase90Editor::showContextMenu (int learnIdx)
             else if (r >= 530 && r < 530 + Phase90Processor::numSyncStates) { ed.setParam ("syncdiv", (float) (r - 530)); pr.presetName = {}; }
             else if (r == 502) { toggleFlag ("stereo"); ed.flash (pr.apvts.getRawParameterValue ("stereo")->load() > 0.5f ? "Stereo spread" : "Mono (original)"); }
             else if (r == 504) toggleFlag ("ticklfo");
-            else if (r >= 600 && r <= 616) ed.setParam ("midichan", (float) (r - 600));
-            else if (r == 710 || r == 711) ed.setParam ("ccmomentary", r == 711 ? 1.0f : 0.0f);
+            else if (r == NineHandsWindow::idLatch || r == NineHandsWindow::idMomentary) ed.setParam ("ccmomentary", r == NineHandsWindow::idMomentary ? 1.0f : 0.0f);
             else if (r >= 1000 && r < 1000 + Phase90Processor::numLearn)
             {
                 const int t = r - 1000;

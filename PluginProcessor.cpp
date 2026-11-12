@@ -323,7 +323,7 @@ void Phase90Processor::getStateInformation (MemoryBlock& dest)
     xml->setAttribute ("ccSpeed", ccSpeed.load());
     xml->setAttribute ("ccVoice", ccVoice.load());
     xml->setAttribute ("ccSync", ccSync.load());
-    xml->setAttribute ("uiHeight", uiHeight.load());
+    xml->setAttribute ("uiSize", uiSizeIdx.load());
     xml->setAttribute ("presetName", presetName);
     xml->setAttribute ("program", currentProgram);
     copyXmlToBinary (*xml, dest);
@@ -346,6 +346,10 @@ void Phase90Processor::setStateInformation (const void* data, int size)
             {
                 const int uh = xml->getIntAttribute ("uiHeight", 0);   // 0 = aucune taille sauvegardée pour cette instance
                 uiHeight = uh > 0 ? jlimit (p9ui::heightDefault, p9ui::heightMax, uh) : 0;
+                // taille du menu (v2.1.0) ; ancien projet : sa hauteur enregistree si c'est une des trois tailles du menu
+                int idx = -1;
+                for (int i = 0; i < p9ui::numSizes; ++i) if (uh > 0 && std::abs (uh - p9ui::sizeHeights[i]) <= 2) idx = i;
+                uiSizeIdx = jlimit (-1, 2, xml->getIntAttribute ("uiSize", idx));
             }
             presetName = xml->getStringAttribute ("presetName");
             currentProgram = xml->getIntAttribute ("program", 0);

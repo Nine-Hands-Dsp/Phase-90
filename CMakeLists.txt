@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "")
 
-project(Phase90 VERSION 2.0.0 LANGUAGES C CXX)
+project(Phase90 VERSION 2.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -66,6 +66,17 @@ target_sources(Phase90 PRIVATE
   PluginProcessor.cpp
   PluginEditor.cpp)
 
+
+# verrou de taille de la fenetre du DAW (jamais sous 60 %, jamais au-dela de 150 %)
+if(APPLE)
+  target_sources(Phase90 PRIVATE WindowMinSize.mm)
+  target_link_libraries(Phase90 PRIVATE "-framework Cocoa")
+else()
+  target_sources(Phase90 PRIVATE WindowMinSize.cpp)
+endif()
+if(WIN32)
+  target_link_libraries(Phase90 PRIVATE comctl32 user32)
+endif()
 if(MSVC)
   target_compile_options(Phase90 PRIVATE /utf-8)
 endif()
